@@ -18,6 +18,10 @@ ansible -i hcloud_inventory cx11 -m ping
 - [hcloud_server - Manage Hetzner Cloud Servers](./docs/hcloud_server.md)
 - [hcloud_ssh_key - Manage Hetzner Cloud SSH Keys](./docs/hcloud_ssh_key.md)
 
+## Installation
+
+Download the binaries for your OS from the releases page and place them into your [Ansible library](http://docs.ansible.com/ansible/latest/intro_configuration.html#library).
+
 ## Licence
 
 MIT license
