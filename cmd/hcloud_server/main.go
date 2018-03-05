@@ -7,10 +7,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/hetznercloud/hcloud-go/hcloud"
 	"github.com/spf13/pflag"
 	"github.com/thetechnick/hcloud-ansible/pkg/ansible"
-	"github.com/thetechnick/hcloud-ansible/pkg/util"
+	"github.com/thetechnick/hcloud-ansible/pkg/hcloud"
 )
 
 type arguments struct {
@@ -75,7 +74,7 @@ func (m *module) Args() interface{} {
 
 func (m *module) Run() (resp ansible.ModuleResponse, err error) {
 	ctx := context.Background()
-	m.client, err = util.BuildClient(m.args.Token)
+	m.client, err = hcloud.BuildClient(m.args.Token)
 	if err != nil {
 		return
 	}

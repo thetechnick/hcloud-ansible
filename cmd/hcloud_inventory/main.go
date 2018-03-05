@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hetznercloud/hcloud-go/hcloud"
 	"github.com/spf13/pflag"
 	"github.com/thetechnick/hcloud-ansible/pkg/ansible"
-	"github.com/thetechnick/hcloud-ansible/pkg/util"
+	"github.com/thetechnick/hcloud-ansible/pkg/hcloud"
 	"github.com/thetechnick/hcloud-ansible/pkg/version"
 )
 
@@ -35,7 +34,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	client, err := util.BuildClient("")
+	client, err := hcloud.BuildClient("")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating Hetzner Cloud client: %v\n", err)
 		os.Exit(1)
