@@ -10,11 +10,13 @@ import (
 	"github.com/thetechnick/hcloud-ansible/pkg/version"
 )
 
+// Module interface for Ansible modules
 type Module interface {
 	Args() interface{}
 	Run() (ModuleResponse, error)
 }
 
+// RunModule executes the module
 func RunModule(m Module, flags *pflag.FlagSet) {
 	var resp ModuleResponse
 	if err := flags.Parse(os.Args[1:]); err != nil {
@@ -55,6 +57,7 @@ func RunModule(m Module, flags *pflag.FlagSet) {
 	}
 }
 
+// ModuleResponse represents the reponse of the module
 type ModuleResponse struct {
 	msg     string
 	changed bool
@@ -62,21 +65,25 @@ type ModuleResponse struct {
 	data    map[string]interface{}
 }
 
+// Msg sets the module message
 func (r *ModuleResponse) Msg(msg string) *ModuleResponse {
 	r.msg = msg
 	return r
 }
 
+// Changed marks the the module as changed
 func (r *ModuleResponse) Changed() *ModuleResponse {
 	r.changed = true
 	return r
 }
 
+// Failed marks the module as failed
 func (r *ModuleResponse) Failed() *ModuleResponse {
 	r.failed = true
 	return r
 }
 
+// Set adds data to the reponse
 func (r *ModuleResponse) Set(key string, value interface{}) *ModuleResponse {
 	if r.data == nil {
 		r.data = map[string]interface{}{}
@@ -85,6 +92,22 @@ func (r *ModuleResponse) Set(key string, value interface{}) *ModuleResponse {
 	return r
 }
 
+// Data returns the data of the response
+func (r *ModuleResponse) Data() map[string]interface{} {
+	return r.data
+}
+
+// HasChanged returns true if the module has changed
+func (r *ModuleResponse) HasChanged() bool {
+	return r.changed
+}
+
+// HasFailed returns true if the module has failed
+func (r *ModuleResponse) HasFailed() bool {
+	return r.failed
+}
+
+// MarshalJSON custom json marshalling
 func (r *ModuleResponse) MarshalJSON() ([]byte, error) {
 	data := map[string]interface{}{
 		"changed": r.changed,
