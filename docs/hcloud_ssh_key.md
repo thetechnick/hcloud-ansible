@@ -1,6 +1,6 @@
 # hcloud_ssh_key
 
-Manages Hetzner Cloud SSH Keys. This module can be used to create and delete ssh keys.
+Manages Hetzner Cloud SSH Keys. This module can be used to create, list and delete ssh keys.
 
 ## Requirements (on host that executes module)
 - ansible >= 2.2.x (binary module support)
@@ -10,8 +10,8 @@ Manages Hetzner Cloud SSH Keys. This module can be used to create and delete ssh
 |---------|--------|-------|-------|--------|
 |token|no|||Hetzner Cloud API Token. Can also be specified with `HCLOUD_TOKEN` environment variable. |
 |state|no|present|<ul><li>present</li><li>absent</li><li>list</li></ul>|  `list` lists all existing ssh keys. |
-| id | no | | | ID of the ssh key. |
-| name | no | | | Name of the ssh key. |
+| id | no | | | ID of the ssh key. (with state: `absent`) |
+| name | no | | | Name of the ssh key. Required when state is `present`. |
 | public_key | no | | | Required when state is `present`. |
 
 ## Return Values
@@ -29,14 +29,14 @@ ssh_keys:
 
 ```yaml
 # create an ssh key
-- ssh_keys:
+- hcloud_ssh_key:
     name: test key
     public_key: "{{lookup('file', '~/.ssh/id_rsa.pub')}}"
 
 
 # list all ssh keys in the Hetzner Cloud Project and
 # create a single server with the fetched ssh keys
-- ssh_keys:
+- hcloud_ssh_key:
     state: list
   register: hcloud_ssh_keys
 
