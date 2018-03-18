@@ -11,6 +11,7 @@ all: build
 build: clean \
 	bin/hcloud_ssh_key \
 	bin/hcloud_server \
+	bin/hcloud_floating_ip \
 	bin/hcloud_inventory
 
 bin/%:
@@ -37,6 +38,9 @@ bin/linux_386/hcloud_server:  GOARGS = GOOS=linux GOARCH=386
 bin/linux_amd64/hcloud_ssh_key:  GOARGS = GOOS=linux GOARCH=amd64
 bin/linux_386/hcloud_ssh_key:  GOARGS = GOOS=linux GOARCH=386
 
+bin/linux_amd64/hcloud_floating_ip:  GOARGS = GOOS=linux GOARCH=amd64
+bin/linux_386/hcloud_floating_ip:  GOARGS = GOOS=linux GOARCH=386
+
 bin/linux_amd64/hcloud_inventory:  GOARGS = GOOS=linux GOARCH=amd64
 bin/linux_386/hcloud_inventory:  GOARGS = GOOS=linux GOARCH=386
 
@@ -46,6 +50,9 @@ bin/%/hcloud_server: clean
 bin/%/hcloud_ssh_key: clean
 	$(GOARGS) go build -o $@ -ldflags $(LD_FLAGS) -a $(REPO)/cmd/hcloud_ssh_key
 
+bin/%/hcloud_floating_ip: clean
+	$(GOARGS) go build -o $@ -ldflags $(LD_FLAGS) -a $(REPO)/cmd/hcloud_floating_ip
+
 bin/%/hcloud_inventory: clean
 	$(GOARGS) go build -o $@ -ldflags $(LD_FLAGS) -a $(REPO)/cmd/hcloud_inventory
 
@@ -54,10 +61,11 @@ _output/hcloud-ansible_%.zip: DEST=_output/$(NAME)
 _output/hcloud-ansible_%.zip: \
 	bin/%/hcloud_server \
 	bin/%/hcloud_ssh_key \
+	bin/%/hcloud_floating_ip \
 	bin/%/hcloud_inventory
 
 	mkdir -p $(DEST)
-	cp bin/$*/hcloud_server bin/$*/hcloud_ssh_key bin/$*/hcloud_inventory README.md LICENSE $(DEST)
+	cp bin/$*/hcloud_floating_ip bin/$*/hcloud_server bin/$*/hcloud_ssh_key bin/$*/hcloud_inventory README.md LICENSE $(DEST)
 	cd $(DEST) && zip -r ../$(NAME).zip .
 
 .PHONY: all build clean test release

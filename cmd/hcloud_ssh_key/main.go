@@ -124,26 +124,38 @@ func (m *module) present(ctx context.Context) (resp ansible.ModuleResponse, err 
 			}
 			resp.Changed()
 			msg = append(msg, fmt.Sprintf("SSHKey %d deleted (changed fingerprint)", sshKey.ID))
+			sshKey = nil
 		} else {
-			resp.Msg(fmt.Sprintf("SSHKey %d exists with matching fingerprint", sshKey.ID))
-			resp.Set("ssh_keys", []SSHKey{toSSHKeyData(sshKey)})
-			return
+			msg = append(msg, fmt.Sprintf("SSHKey %d exists with matching fingerprint", sshKey.ID))
 		}
 	}
 
-	sshKey, _, err = m.client.SSHKey.Create(ctx, hcloud.SSHKeyCreateOpts{
-		Name:      m.args.Name,
-		PublicKey: m.args.PublicKey,
-	})
-	if err != nil {
-		return
+	if sshKey != nil {
+		if sshKey.Name != m.args.Name {
+			sshKey, _, err = m.client.SSHKey.Update(ctx, sshKey, hcloud.SSHKeyUpdateOpts{
+				Name: m.args.Name,
+			})
+			if err != nil {
+				return
+			}
+		}
 	}
 
-	msg = append(msg, fmt.Sprintf("SSHKey %d created", sshKey.ID))
+	if sshKey == nil {
+		sshKey, _, err = m.client.SSHKey.Create(ctx, hcloud.SSHKeyCreateOpts{
+			Name:      m.args.Name,
+			PublicKey: m.args.PublicKey,
+		})
+		if err != nil {
+			return
+		}
+		msg = append(msg, fmt.Sprintf("SSHKey %d created", sshKey.ID))
+		resp.Changed()
+	}
+
 	resp.
 		Msg(strings.Join(msg, ", ")).
-		Changed().
-		Set("ssh_key", []SSHKey{toSSHKeyData(sshKey)})
+		Set("ssh_keys", []SSHKey{toSSHKeyData(sshKey)})
 	return
 }
 
