@@ -62,16 +62,32 @@ type Client struct {
 func NewClient(options ...hcloud.ClientOption) *Client {
 	c := hcloud.NewClient(options...)
 	return &Client{
-		Client: c,
-		Action: &c.Action,
-		Server: &c.Server,
-		SSHKey: &c.SSHKey,
-		Image:  &c.Image,
+		Client:     c,
+		Action:     &c.Action,
+		Server:     &c.Server,
+		SSHKey:     &c.SSHKey,
+		Image:      &c.Image,
+		FloatingIP: &c.FloatingIP,
 	}
+}
+
+// String alias of hcloud.String
+func String(s string) *string {
+	return hcloud.String(s)
 }
 
 // Action alias of hcloud.Action
 type Action = hcloud.Action
+
+// ActionStatus alias of hcloud.ActionStatus
+type ActionStatus = hcloud.ActionStatus
+
+// ActionStatus
+const (
+	ActionStatusError   = hcloud.ActionStatusError
+	ActionStatusSuccess = hcloud.ActionStatusSuccess
+	ActionStatusRunning = hcloud.ActionStatusRunning
+)
 
 // ActionClient interface of hcloud.ActionClient
 type ActionClient interface {
@@ -93,13 +109,40 @@ type DatacenterClient interface {
 	All(ctx context.Context) ([]*hcloud.Datacenter, error)
 }
 
+// FloatingIP alias of hcloud.FloatingIP
+type FloatingIP = hcloud.FloatingIP
+
+// FloatingIPCreateOpts alias of hcloud.FloatingIPCreateOpts
+type FloatingIPCreateOpts = hcloud.FloatingIPCreateOpts
+
+// FloatingIPListOpts alias of hcloud.FloatingIPListOpts
+type FloatingIPListOpts = hcloud.FloatingIPListOpts
+
+// FloatingIPCreateResult alias of hcloud.FloatingIPCreateResult
+type FloatingIPCreateResult = hcloud.FloatingIPCreateResult
+
+// FloatingIPType alias of hcloud.FloatingIPType
+type FloatingIPType = hcloud.FloatingIPType
+
+// FloatingIPUpdateOpts alias of hcloud.FloatingIPUpdateOpts
+type FloatingIPUpdateOpts = hcloud.FloatingIPUpdateOpts
+
+// Floating IP types.
+const (
+	FloatingIPTypeIPv4 = hcloud.FloatingIPTypeIPv4
+	FloatingIPTypeIPv6 = hcloud.FloatingIPTypeIPv6
+)
+
 // FloatingIPClient interface of hcloud.FloatingIPClient
 type FloatingIPClient interface {
-	GetByID(ctx context.Context, id int) (*hcloud.FloatingIP, *hcloud.Response, error)
-	List(ctx context.Context, opts hcloud.FloatingIPListOpts) ([]*hcloud.FloatingIP, *hcloud.Response, error)
-	All(ctx context.Context) ([]*hcloud.FloatingIP, error)
-	Create(ctx context.Context, opts hcloud.FloatingIPCreateOpts) (hcloud.FloatingIPCreateResult, *hcloud.Response, error)
-	Delete(ctx context.Context, floatingIP *hcloud.FloatingIP) (*hcloud.Response, error)
+	GetByID(ctx context.Context, id int) (*FloatingIP, *Response, error)
+	List(ctx context.Context, opts FloatingIPListOpts) ([]*FloatingIP, *Response, error)
+	All(ctx context.Context) ([]*FloatingIP, error)
+	Create(ctx context.Context, opts FloatingIPCreateOpts) (FloatingIPCreateResult, *Response, error)
+	Delete(ctx context.Context, floatingIP *FloatingIP) (*Response, error)
+	Assign(ctx context.Context, floatingIP *FloatingIP, server *Server) (*Action, *Response, error)
+	Unassign(ctx context.Context, floatingIP *FloatingIP) (*Action, *Response, error)
+	Update(ctx context.Context, floatingIP *FloatingIP, opts FloatingIPUpdateOpts) (*FloatingIP, *Response, error)
 }
 
 // Image alias of hcloud.Image

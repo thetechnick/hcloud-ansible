@@ -17,6 +17,7 @@ ansible -i hcloud_inventory cx11 -m ping
 
 - [hcloud_server - Manage Hetzner Cloud Servers](./docs/hcloud_server.md)
 - [hcloud_ssh_key - Manage Hetzner Cloud SSH Keys](./docs/hcloud_ssh_key.md)
+- [hcloud_floating_ip - Manage Hetzner Cloud Floating IPs](./docs/hcloud_floating_ip.md)
 
 ## Installation
 

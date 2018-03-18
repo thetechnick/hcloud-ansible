@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/spf13/pflag"
 	"github.com/thetechnick/hcloud-ansible/pkg/ansible"
 	"github.com/thetechnick/hcloud-ansible/pkg/hcloud"
+	"github.com/thetechnick/hcloud-ansible/pkg/util"
 )
 
 type arguments struct {
@@ -167,55 +167,33 @@ func (m *module) image(ctx context.Context, imageArg string) (image *hcloud.Imag
 }
 
 func (m *module) sshKeys(ctx context.Context, sshArgs interface{}) (sshKeys []*hcloud.SSHKey, err error) {
-	sshKeysList, ok := sshArgs.([]interface{})
-	if !ok {
+	switch keys := sshArgs.(type) {
+	case []interface{}:
+		for _, keyI := range keys {
+			var sshKey *hcloud.SSHKey
+			id := util.GetID(keyI)
+			name := util.GetName(keyI)
+			if id != 0 {
+				sshKey, _, err = m.client.SSHKey.GetByID(ctx, id)
+			}
+			if id == 0 && name != "" {
+				sshKey, _, err = m.client.SSHKey.GetByName(ctx, name)
+			}
+			if err != nil {
+				return
+			}
+			if sshKey == nil {
+				err = fmt.Errorf("SSH key not found: %v", keyI)
+				return
+			}
+			sshKeys = append(sshKeys, sshKey)
+		}
+
+	case nil:
 		// no ssh keys
 		return
 	}
 
-	for _, sshKeyValue := range sshKeysList {
-		var sshKey *hcloud.SSHKey
-		switch v := sshKeyValue.(type) {
-		case int:
-			sshKey, _, err = m.client.SSHKey.GetByID(ctx, v)
-
-		case string:
-			sshKey, _, err = m.client.SSHKey.Get(ctx, v)
-
-		case map[string]interface{}:
-			var nameOrID string
-			if name, ok := v["name"]; ok {
-				name, tok := name.(string)
-				if !tok {
-					err = fmt.Errorf("'ssh_keys' invalid format: 'name' is no string")
-					return
-				}
-				nameOrID = name
-			}
-			if id, ok := v["id"]; ok {
-				id, tok := id.(float64)
-				if !tok {
-					err = fmt.Errorf("'ssh_keys' invalid format: 'id' is no number")
-					return
-				}
-				nameOrID = strconv.Itoa(int(id))
-			}
-			sshKey, _, err = m.client.SSHKey.Get(ctx, nameOrID)
-
-		default:
-			err = fmt.Errorf("'ssh_keys' unkown format")
-			return
-		}
-
-		if err != nil {
-			return
-		}
-		if sshKey == nil {
-			err = fmt.Errorf("SSH key not found: %v", sshKeyValue)
-			return
-		}
-		sshKeys = append(sshKeys, sshKey)
-	}
 	return
 }
 
