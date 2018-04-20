@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -18,7 +19,7 @@ type arguments struct {
 
 	ID         interface{} `json:"id"`
 	Name       interface{} `json:"name"`
-	Image      string      `json:"image"`
+	Image      interface{} `json:"image"`
 	ServerType string      `json:"server_type"`
 	UserData   string      `json:"user_data"`
 	Datacenter string      `json:"datacenter"`
@@ -30,25 +31,29 @@ type arguments struct {
 const (
 	stateAbsent    = "absent"
 	statePresent   = "present"
+	stateList      = "list"
 	stateRunning   = "running"
 	stateStopped   = "stopped"
 	stateRestarted = "restarted"
 )
 
 type config struct {
-	State      string
+	Token string
+	State string
+
 	Name       []string
 	ID         []int
 	Image      *hcloud.Image
 	ServerType string
 	UserData   string
-	Datacenter string
-	Location   string
+	Datacenter *hcloud.Datacenter
+	Location   *hcloud.Location
 	Rescue     string
 	SSHKeys    []*hcloud.SSHKey
 }
 
-type out struct {
+// Server is the module return value of an hcloud.Server
+type Server struct {
 	ID         int    `json:"id"`
 	Name       string `json:"name"`
 	Image      string `json:"image"`
@@ -61,11 +66,11 @@ type out struct {
 }
 
 type module struct {
-	args            arguments
-	client          *hcloud.Client
-	config          config
-	messages        ansible.MessageLog
-	actionWatchLock sync.Mutex
+	args     arguments
+	config   config
+	client   *hcloud.Client
+	waitFn   util.WaitFn
+	messages ansible.MessageLog
 }
 
 func (m *module) Args() interface{} {
@@ -73,229 +78,173 @@ func (m *module) Args() interface{} {
 }
 
 func (m *module) Run() (resp ansible.ModuleResponse, err error) {
-	ctx := context.Background()
-	m.client, err = hcloud.BuildClient(m.args.Token)
-	if err != nil {
+	if m.client, err = hcloud.BuildClient(m.args.Token); err != nil {
 		return
 	}
-	m.config = config{
-		State:      m.args.State,
-		ServerType: m.args.ServerType,
-		UserData:   m.args.UserData,
-		Datacenter: m.args.Datacenter,
-		Location:   m.args.Location,
-		Rescue:     m.args.Rescue,
-	}
-	if m.config.State == "" {
-		m.config.State = statePresent
-	}
-	if m.config.Name, err = names(m.args.Name); err != nil {
-		return
-	}
-	if m.config.Image, err = m.image(ctx, m.args.Image); err != nil {
-		return
-	}
-	if m.config.SSHKeys, err = m.sshKeys(ctx, m.args.SSHKeys); err != nil {
-		return
-	}
-
-	if err = validateConfig(m.config); err != nil {
-		return
-	}
-
-	var (
-		wg        sync.WaitGroup
-		stateLock sync.Mutex
-		instances []*out
-	)
-
-	ensureServer := func(id int, name string) {
-		out, changed, err := m.ensureServer(ctx, 0, name)
-		stateLock.Lock()
-		if err != nil {
-			m.messages.Add(err.Error())
-			resp.Failed()
-			return
-		}
-		if changed {
-			resp.Changed()
-		}
-		if out != nil {
-			instances = append(instances, out)
-		}
-		stateLock.Unlock()
-		wg.Done()
-	}
-
-	if len(m.config.ID) > 0 {
-		for i, id := range m.config.ID {
-			wg.Add(1)
-			var name string
-			if len(m.config.Name) > i {
-				name = m.config.Name[i]
-			}
-			ensureServer(id, name)
-		}
-	} else {
-		for _, name := range m.config.Name {
-			wg.Add(1)
-			ensureServer(0, name)
-		}
-	}
-
-	wg.Wait()
-	if len(instances) > 0 {
-		resp.Set("servers", instances)
-	}
-	resp.Msg(m.messages.String())
-	return
+	m.waitFn = util.WaitForAction
+	return m.run(context.Background())
 }
 
-func (m *module) image(ctx context.Context, imageArg string) (image *hcloud.Image, err error) {
-	if imageArg == "" {
+func (m *module) run(ctx context.Context) (resp ansible.ModuleResponse, err error) {
+	if m.config, err = m.argsToConfig(ctx, m.args); err != nil {
 		return
 	}
-
-	if image, _, err = m.client.Image.Get(ctx, imageArg); err != nil {
-		return
-	}
-	if image == nil {
-		err = fmt.Errorf("'image' (%s) not found", imageArg)
-		return
-	}
-	return
-}
-
-func (m *module) sshKeys(ctx context.Context, sshArgs interface{}) (sshKeys []*hcloud.SSHKey, err error) {
-	switch keys := sshArgs.(type) {
-	case []interface{}:
-		for _, keyI := range keys {
-			var sshKey *hcloud.SSHKey
-			id := util.GetID(keyI)
-			name := util.GetName(keyI)
-			if id != 0 {
-				sshKey, _, err = m.client.SSHKey.GetByID(ctx, id)
-			}
-			if id == 0 && name != "" {
-				sshKey, _, err = m.client.SSHKey.GetByName(ctx, name)
-			}
-			if err != nil {
-				return
-			}
-			if sshKey == nil {
-				err = fmt.Errorf("SSH key not found: %v", keyI)
-				return
-			}
-			sshKeys = append(sshKeys, sshKey)
-		}
-
-	case nil:
-		// no ssh keys
-		return
+	if m.args.State == "" {
+		m.args.State = statePresent
 	}
 
-	return
-}
-
-// ids parses the id input property
-func ids(ids interface{}) (out []int, err error) {
-	switch v := ids.(type) {
-	case int:
-		out = append(out, v)
-		return
-
-	case []interface{}:
-		for _, idI := range v {
-			if id, ok := idI.(int); ok {
-				out = append(out, id)
-				continue
-			}
-			err = fmt.Errorf("'id' unkown format")
-			return
-		}
-		return
-
-	case nil:
-		return
-
+	switch m.config.State {
+	case stateAbsent:
+		return m.absent(ctx)
+	case statePresent:
+		return m.present(ctx)
+	case stateList:
+		return m.list(ctx)
+	case stateRunning:
+		return m.running(ctx)
+	case stateStopped:
+		return m.stopped(ctx)
+	case stateRestarted:
+		return m.restarted(ctx)
 	default:
-		err = fmt.Errorf("'id' unkown format")
+		err = errors.New("invalid state")
 		return
 	}
 }
 
-// names parses the name input property
-func names(names interface{}) (out []string, err error) {
-	switch v := names.(type) {
-	case string:
-		out = append(out, v)
-		return
-
-	case []interface{}:
-		for _, nameI := range v {
-			if name, ok := nameI.(string); ok {
-				out = append(out, name)
-				continue
-			}
-			err = fmt.Errorf("'name' unkown format")
-			return
-		}
-		return
-
-	case nil:
-		return
-
-	default:
-		err = fmt.Errorf("'name' unkown format")
-		return
-	}
-}
-
-func (m *module) ensureServer(ctx context.Context, id int, name string) (out *out, changed bool, err error) {
-	var server *hcloud.Server
-	if id != 0 {
-		if server, _, err = m.client.Server.GetByID(ctx, id); err != nil {
-			return
-		}
-		if server == nil {
-			err = fmt.Errorf("Server %d not found", id)
-			return
-		}
-	} else {
-		if server, _, err = m.client.Server.GetByName(ctx, name); err != nil {
-			return
-		}
-	}
-
-	if m.args.State == stateAbsent {
-		if server != nil {
-			if _, err = m.client.Server.Delete(ctx, server); err != nil {
-				return
-			}
-
-			m.messages.Add(fmt.Sprintf("Server %d deleted", server.ID))
-			changed = true
-			return
-		}
-		return
-	}
-
-	if server != nil && needsRecreate(server, m.config) {
+func (m *module) absent(ctx context.Context) (resp ansible.ModuleResponse, err error) {
+	var servers []*hcloud.Server
+	servers, err = m.servers(ctx)
+	for _, server := range servers {
 		if _, err = m.client.Server.Delete(ctx, server); err != nil {
 			return
 		}
+		resp.Changed()
+	}
+	return
+}
 
-		m.messages.Add(fmt.Sprintf("Server %d deleted (recreate)", server.ID))
+func (m *module) present(ctx context.Context) (resp ansible.ModuleResponse, err error) {
+	var (
+		errors     []string
+		errorsLock sync.Mutex
+		wg         sync.WaitGroup
+	)
+	for _, name := range m.config.Name {
+		wg.Add(1)
+		go func(ctx context.Context, name string) (err error) {
+			defer wg.Done()
+			defer func() {
+				if err != nil {
+					errorsLock.Lock()
+					errors = append(errors, err.Error())
+					errorsLock.Unlock()
+				}
+			}()
+			if err = m.ensureServer(ctx, &resp, name); err != nil {
+				return
+			}
+			return
+		}(ctx, name)
+	}
+	wg.Wait()
+
+	if len(errors) > 0 {
+		err = fmt.Errorf("%s", strings.Join(errors, ", "))
+		return
+	}
+
+	if err = m.output(ctx, &resp); err != nil {
+		return
+	}
+	return
+}
+
+func (m *module) servers(ctx context.Context) (servers []*hcloud.Server, err error) {
+	if len(m.config.Name) == 0 && len(m.config.ID) == 0 {
+		err = fmt.Errorf("'name' or 'id' is required")
+		return
+	}
+
+	for _, id := range m.config.ID {
+		var server *hcloud.Server
+		if server, _, err = m.client.Server.GetByID(ctx, id); err != nil {
+			return
+		}
+		if server == nil && m.config.State != stateAbsent {
+			err = fmt.Errorf("Server with id %q not found", id)
+		}
+		servers = append(servers, server)
+	}
+	for _, name := range m.config.Name {
+		var server *hcloud.Server
+		if server, _, err = m.client.Server.GetByName(ctx, name); err != nil {
+			return
+		}
+		if server == nil &&
+			m.config.State != stateAbsent &&
+			m.config.State != statePresent &&
+			m.config.State != stateRunning &&
+			m.config.State != stateStopped {
+			err = fmt.Errorf("Server with name %q not found", name)
+		}
+		servers = append(servers, server)
+	}
+	return
+}
+
+func (m *module) ensureServer(ctx context.Context, resp *ansible.ModuleResponse, name string) (err error) {
+	var server *hcloud.Server
+	if server, _, err = m.client.Server.GetByName(ctx, name); err != nil {
+		return
+	}
+
+	if needsRecreate(server, m.config) {
+		if _, err = m.client.Server.Delete(ctx, server); err != nil {
+			return
+		}
 		server = nil
-		changed = true
+		resp.Changed()
 	}
 
 	if server == nil {
-		if server, err = m.createServer(ctx, name); err != nil {
+		var errs []string
+		if m.config.Image == nil {
+			errs = append(errs, "'image' is required")
+		}
+		if m.config.ServerType == "" {
+			errs = append(errs, "'server_type' is required")
+		}
+		if len(errs) > 0 {
+			return fmt.Errorf("Cannot create server '%s': %s", name, strings.Join(errs, ", "))
+		}
+
+		resp.Changed()
+		opts := hcloud.ServerCreateOpts{
+			Name: name,
+			ServerType: &hcloud.ServerType{
+				Name: m.config.ServerType,
+			},
+			UserData: m.config.UserData,
+			SSHKeys:  m.config.SSHKeys,
+			Image:    m.config.Image,
+		}
+		if m.config.Datacenter != nil {
+			opts.Datacenter = m.config.Datacenter
+		}
+		if m.config.Location != nil {
+			opts.Location = m.config.Location
+		}
+
+		var res hcloud.ServerCreateResult
+		res, _, err = m.client.Server.Create(ctx, opts)
+		if err != nil {
 			return
 		}
-		m.messages.Add(fmt.Sprintf("Server %d created", server.ID))
-		changed = true
+		if err = m.waitFn(ctx, m.client, res.Action); err != nil {
+			return err
+		}
+		server = res.Server
 	}
 
 	switch m.config.State {
@@ -306,11 +255,11 @@ func (m *module) ensureServer(ctx context.Context, id int, name string) (out *ou
 				return
 			}
 
-			if err = m.waitForAction(ctx, action); err != nil {
+			if err = m.waitFn(ctx, m.client, action); err != nil {
 				return
 			}
 			m.messages.Add(fmt.Sprintf("Server %d started", server.ID))
-			changed = true
+			resp.Changed()
 		}
 
 	case stateStopped:
@@ -320,24 +269,12 @@ func (m *module) ensureServer(ctx context.Context, id int, name string) (out *ou
 				return
 			}
 
-			if err = m.waitForAction(ctx, action); err != nil {
+			if err = m.waitFn(ctx, m.client, action); err != nil {
 				return
 			}
 			m.messages.Add(fmt.Sprintf("Server %d stopped", server.ID))
-			changed = true
+			resp.Changed()
 		}
-
-	case stateRestarted:
-		var action *hcloud.Action
-		if action, _, err = m.client.Server.Reboot(ctx, server); err != nil {
-			return
-		}
-
-		if err = m.waitForAction(ctx, action); err != nil {
-			return
-		}
-		m.messages.Add(fmt.Sprintf("Server %d restarted", server.ID))
-		changed = true
 	}
 
 	if name != "" && server.Name != name {
@@ -356,11 +293,11 @@ func (m *module) ensureServer(ctx context.Context, id int, name string) (out *ou
 			return
 		}
 
-		if err = m.waitForAction(ctx, action); err != nil {
+		if err = m.waitFn(ctx, m.client, action); err != nil {
 			return
 		}
 		m.messages.Add(fmt.Sprintf("Server %d disabled rescue mode", server.ID))
-		changed = true
+		resp.Changed()
 		rescueChanged = true
 	}
 	if !server.RescueEnabled && m.config.Rescue != "" {
@@ -373,11 +310,11 @@ func (m *module) ensureServer(ctx context.Context, id int, name string) (out *ou
 			return
 		}
 
-		if err = m.waitForAction(ctx, res.Action); err != nil {
+		if err = m.waitFn(ctx, m.client, res.Action); err != nil {
 			return
 		}
 		m.messages.Add(fmt.Sprintf("Server %d enabled rescue mode", server.ID))
-		changed = true
+		resp.Changed()
 		rescueChanged = true
 	}
 
@@ -386,91 +323,107 @@ func (m *module) ensureServer(ctx context.Context, id int, name string) (out *ou
 		if action, _, err = m.client.Server.Reset(ctx, server); err != nil {
 			return
 		}
-		if err = m.waitForAction(ctx, action); err != nil {
+		if err = m.waitFn(ctx, m.client, action); err != nil {
 			return
 		}
 	}
 
-	out = toServerData(server)
 	return
 }
 
-func (m *module) createServer(ctx context.Context, name string) (*hcloud.Server, error) {
-	var errs []string
-	if m.config.Image == nil {
-		errs = append(errs, "'image' is required")
+func (m *module) output(ctx context.Context, resp *ansible.ModuleResponse) (err error) {
+	var (
+		servers []*hcloud.Server
+		s       []Server
+	)
+	if servers, err = m.servers(ctx); err != nil {
+		return
 	}
-	if m.config.ServerType == "" {
-		errs = append(errs, "'server_type' is required")
+	for _, server := range servers {
+		s = append(s, toServer(server))
 	}
-	if len(errs) > 0 {
-		return nil, fmt.Errorf("Cannot create server '%s': %s", name, strings.Join(errs, ", "))
-	}
-
-	opts := hcloud.ServerCreateOpts{
-		Name: name,
-		ServerType: &hcloud.ServerType{
-			Name: m.config.ServerType,
-		},
-		UserData: m.config.UserData,
-		SSHKeys:  m.config.SSHKeys,
-		Image:    m.config.Image,
-	}
-
-	if m.config.Datacenter != "" {
-		opts.Datacenter = &hcloud.Datacenter{Name: m.config.Datacenter}
-	}
-	if m.config.Location != "" {
-		opts.Location = &hcloud.Location{Name: m.config.Location}
-	}
-
-	res, _, err := m.client.Server.Create(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-	if err = m.waitForAction(ctx, res.Action); err != nil {
-		return nil, err
-	}
-
-	server, _, err := m.client.Server.GetByID(ctx, res.Server.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return server, nil
+	resp.Set("servers", s)
+	return
 }
 
-// waitForAction makes sure we only watch one action at a time
-func (m *module) waitForAction(ctx context.Context, action *hcloud.Action) error {
-	m.actionWatchLock.Lock()
-	defer m.actionWatchLock.Unlock()
-	_, errCh := m.client.Action.WatchProgress(ctx, action)
-	return <-errCh
+func (m *module) list(ctx context.Context) (resp ansible.ModuleResponse, err error) {
+	var servers []*hcloud.Server
+	if len(m.config.ID) != 0 || len(m.config.Name) != 0 {
+		if servers, err = m.servers(ctx); err != nil {
+			return
+		}
+	} else {
+		if servers, err = m.client.Server.All(ctx); err != nil {
+			return
+		}
+	}
+
+	var s []Server
+	for _, server := range servers {
+		s = append(s, toServer(server))
+	}
+	resp.Set("servers", s)
+	return
 }
 
-func validateConfig(config config) error {
-	errs := []string{}
-	if len(config.Name) == 0 && len(config.ID) == 0 {
-		errs = append(errs, "'name' or 'id' is required")
+func (m *module) running(ctx context.Context) (resp ansible.ModuleResponse, err error) {
+	return m.present(ctx)
+}
+
+func (m *module) stopped(ctx context.Context) (resp ansible.ModuleResponse, err error) {
+	return m.present(ctx)
+}
+
+func (m *module) restarted(ctx context.Context) (resp ansible.ModuleResponse, err error) {
+	var servers []*hcloud.Server
+	if servers, err = m.servers(ctx); err != nil {
+		return
 	}
-	if config.State != stateAbsent &&
-		config.State != statePresent &&
-		config.State != stateRunning &&
-		config.State != stateStopped &&
-		config.State != stateRestarted {
-		errs = append(errs, "'state' must be present, absent, running, stopped or restarted")
+
+	var (
+		errors     []string
+		errorsLock sync.Mutex
+		wg         sync.WaitGroup
+	)
+	for _, server := range servers {
+		wg.Add(1)
+		resp.Changed()
+		go func(ctx context.Context, server *hcloud.Server) (err error) {
+			defer wg.Done()
+			defer func() {
+				if err != nil {
+					errorsLock.Lock()
+					errors = append(errors, err.Error())
+					errorsLock.Unlock()
+				}
+			}()
+			var action *hcloud.Action
+			if action, _, err = m.client.Server.Reboot(ctx, server); err != nil {
+				return
+			}
+			if err = m.waitFn(ctx, m.client, action); err != nil {
+				return
+			}
+			return
+		}(ctx, server)
 	}
-	if config.Datacenter != "" && config.Location != "" {
-		errs = append(errs, "'datacenter' and 'location' are mutually exclusive")
+	wg.Wait()
+	if len(errors) > 0 {
+		err = fmt.Errorf("%s", strings.Join(errors, ", "))
+		return
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("Invalid config: %s", strings.Join(errs, ", "))
+
+	if err = m.output(ctx, &resp); err != nil {
+		return
 	}
-	return nil
+	return
 }
 
 // needsRecreate checks if the server needs to be recreated
 func needsRecreate(server *hcloud.Server, config config) bool {
+	if server == nil {
+		return false
+	}
 	if config.Image != nil &&
 		server.Image.ID != config.Image.ID {
 		return true
@@ -479,20 +432,105 @@ func needsRecreate(server *hcloud.Server, config config) bool {
 		server.ServerType.Name != config.ServerType {
 		return true
 	}
-	if config.Datacenter != "" &&
-		server.Datacenter.Name != config.Datacenter {
+	if config.Datacenter != nil &&
+		server.Datacenter.Name != config.Datacenter.Name {
 		return true
 	}
-	if config.Location != "" &&
-		server.Datacenter.Location.Name != config.Location {
+	if config.Location != nil &&
+		server.Datacenter.Location.Name != config.Location.Name {
 		return true
 	}
 
 	return false
 }
 
-func toServerData(server *hcloud.Server) *out {
-	return &out{
+func validateState(state string) error {
+	if state != statePresent &&
+		state != stateAbsent &&
+		state != stateList &&
+		state != stateRestarted &&
+		state != stateRunning &&
+		state != stateStopped {
+		return fmt.Errorf("'state' must be present, absent, running, stopped, list or restarted")
+	}
+	return nil
+}
+
+func (m *module) argsToConfig(ctx context.Context, args arguments) (
+	c config,
+	err error,
+) {
+	c.Token = args.Token
+
+	if m.args.State == "" {
+		m.args.State = statePresent
+	}
+	if err = validateState(args.State); err != nil {
+		return
+	}
+	c.State = args.State
+
+	c.Name = util.GetNames(args.Name)
+	c.ID = util.GetIDs(args.ID)
+	c.ServerType = args.ServerType
+	c.UserData = args.UserData
+	c.Rescue = args.Rescue
+
+	// Image
+	if imageID := util.GetID(args.Image); imageID != 0 {
+		c.Image, _, err = m.client.Image.GetByID(ctx, imageID)
+		if err != nil {
+			return
+		}
+		if c.Image == nil {
+			err = fmt.Errorf("requested image with id %d not found", imageID)
+			return
+		}
+	}
+	if imageName := util.GetName(args.Image); imageName != "" {
+		c.Image, _, err = m.client.Image.GetByName(ctx, imageName)
+		if err != nil {
+			return
+		}
+		if c.Image == nil {
+			err = fmt.Errorf("requested image with name %s not found", imageName)
+			return
+		}
+	}
+	if c.Image == nil && args.Image != nil {
+		err = fmt.Errorf("image unknown format: %v", args.Image)
+		return
+	}
+
+	// Datacenter
+	if args.Datacenter != "" {
+		c.Datacenter, _, err = m.client.Datacenter.Get(ctx, args.Datacenter)
+		if err != nil {
+			return
+		}
+		if c.Datacenter == nil {
+			err = fmt.Errorf("datacenter '%s' not found", args.Datacenter)
+			return
+		}
+	}
+
+	// Location
+	if args.Location != "" {
+		c.Location, _, err = m.client.Location.Get(ctx, args.Location)
+		if err != nil {
+			return
+		}
+		if c.Location == nil {
+			err = fmt.Errorf("location '%s' not found", args.Location)
+			return
+		}
+	}
+
+	return
+}
+
+func toServer(server *hcloud.Server) Server {
+	return Server{
 		ID:         server.ID,
 		Name:       server.Name,
 		Status:     string(server.Status),
@@ -503,12 +541,14 @@ func toServerData(server *hcloud.Server) *out {
 		PublicIPv6: server.PublicNet.IPv6.Network.String()}
 }
 
-var flags = pflag.NewFlagSet("hcloud_server", pflag.ContinueOnError)
+var flags = pflag.NewFlagSet("hcloud_floating_ip", pflag.ContinueOnError)
 
 func init() {
 	flags.BoolP("version", "v", false, "Print version and exit")
 }
 
 func main() {
-	ansible.RunModule(&module{}, flags)
+	ansible.RunModule(&module{
+		waitFn: util.WaitForAction,
+	}, flags)
 }

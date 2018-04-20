@@ -15,6 +15,13 @@ func TestGetNames(t *testing.T) {
 		names := GetNames(value)
 		assert.Equal(t, []string{"test1", "test2"}, names)
 	})
+	t.Run("string", func(t *testing.T) {
+		var value interface{}
+		json.Unmarshal([]byte(`"test1"`), &value)
+
+		names := GetNames(value)
+		assert.Equal(t, []string{"test1"}, names)
+	})
 }
 
 func TestGetName(t *testing.T) {
@@ -25,13 +32,43 @@ func TestGetName(t *testing.T) {
 		name := GetName(value)
 		assert.Equal(t, "test", name)
 	})
+	t.Run("int", func(t *testing.T) {
+		var value interface{}
+		json.Unmarshal([]byte(`1`), &value)
 
+		name := GetName(value)
+		assert.Equal(t, "1", name)
+	})
 	t.Run("object name", func(t *testing.T) {
 		var value interface{}
 		json.Unmarshal([]byte(`{"name":"test"}`), &value)
 
 		id := GetName(value)
 		assert.Equal(t, "test", id)
+	})
+}
+
+func TestGetIDs(t *testing.T) {
+	t.Run("[]int", func(t *testing.T) {
+		var value interface{}
+		json.Unmarshal([]byte(`[2, 5]`), &value)
+
+		names := GetIDs(value)
+		assert.Equal(t, []int{2, 5}, names)
+	})
+	t.Run("string", func(t *testing.T) {
+		var value interface{}
+		json.Unmarshal([]byte(`"5"`), &value)
+
+		names := GetIDs(value)
+		assert.Equal(t, []int{5}, names)
+	})
+	t.Run("int", func(t *testing.T) {
+		var value interface{}
+		json.Unmarshal([]byte(`5`), &value)
+
+		names := GetIDs(value)
+		assert.Equal(t, []int{5}, names)
 	})
 }
 

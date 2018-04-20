@@ -1,109 +1,362 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"net"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/thetechnick/hcloud-ansible/pkg/hcloud"
+	"github.com/thetechnick/hcloud-ansible/pkg/hcloud/hcloudtest"
+	"github.com/thetechnick/hcloud-ansible/pkg/util"
 )
 
-func TestNames(t *testing.T) {
-	t.Run("with nil", func(t *testing.T) {
-		n, err := names(nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+var (
+	server      *hcloud.Server
+	image       *hcloud.Image
+	nilServer   *hcloud.Server
+	nilResponse *hcloud.Response
+)
+
+func init() {
+	i, n, _ := net.ParseCIDR("2001:db8::/64")
+	server = &hcloud.Server{
+		ID:         123,
+		Name:       "test",
+		ServerType: &hcloud.ServerType{},
+		Datacenter: &hcloud.Datacenter{Location: &hcloud.Location{}},
+		PublicNet: hcloud.ServerPublicNet{
+			IPv4: hcloud.ServerPublicNetIPv4{
+				IP: net.ParseIP("192.168.1.2"),
+			},
+			IPv6: hcloud.ServerPublicNetIPv6{
+				IP:      i,
+				Network: n,
+			},
+		},
+	}
+
+	image = &hcloud.Image{ID: 123}
+}
+
+func TestList(t *testing.T) {
+	t.Run("with id", func(t *testing.T) {
+		client := hcloud.NewClient()
+		client.Server = hcloudtest.NewServerClientMock()
+
+		m := module{
+			client: client,
+			args: arguments{
+				Token: "--token--",
+				State: stateList,
+				ID:    "123",
+			},
+			waitFn: util.WaitFn(func(ctx context.Context, client *hcloud.Client, action *hcloud.Action) error {
+				return nil
+			}),
 		}
-		if n != nil {
-			t.Errorf("should return nil")
-		}
+
+		ctx := context.Background()
+		var (
+			response *hcloud.Response
+		)
+		serverClientMock := client.Server.(*hcloudtest.ServerClientMock)
+
+		serverClientMock.On("GetByID", mock.Anything, mock.Anything).Return(server, response, nil)
+
+		resp, err := m.run(ctx)
+		assert.NoError(t, err)
+		assert.False(t, resp.HasChanged(), "should not have changed")
+		assert.False(t, resp.HasFailed(), "should not have failed")
+		serverClientMock.AssertCalled(t, "GetByID", mock.Anything, 123)
+		assert.Equal(t, map[string]interface{}{
+			"servers": []Server{toServer(server)},
+		}, resp.Data())
 	})
 
-	t.Run("with []string", func(t *testing.T) {
-		n, err := names([]interface{}{"hans"})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if n == nil {
-			t.Errorf("should not return nil")
-		}
-		if len(n) != 1 || n[0] != "hans" {
-			t.Errorf("unexpected return value: %v", n)
-		}
-	})
+	t.Run("without params", func(t *testing.T) {
+		client := hcloud.NewClient()
+		client.Server = hcloudtest.NewServerClientMock()
 
-	t.Run("with string", func(t *testing.T) {
-		n, err := names("hans")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		m := module{
+			client: client,
+			args: arguments{
+				Token: "--token--",
+				State: stateList,
+			},
+			waitFn: util.WaitFn(func(ctx context.Context, client *hcloud.Client, action *hcloud.Action) error {
+				return nil
+			}),
 		}
-		if n == nil {
-			t.Errorf("should not return nil")
-		}
-		if len(n) != 1 || n[0] != "hans" {
-			t.Errorf("unexpected return value: %v", n)
-		}
-	})
 
-	t.Run("with map[string]string", func(t *testing.T) {
-		_, err := names(map[string]string{})
-		if err == nil {
-			t.Fatalf("expected an error")
-		}
-	})
+		ctx := context.Background()
+		serverClientMock := client.Server.(*hcloudtest.ServerClientMock)
 
-	t.Run("with []int", func(t *testing.T) {
-		_, err := names([]interface{}{1, 2})
-		if err == nil {
-			t.Fatalf("expected an error")
-		}
+		serverClientMock.On("All", mock.Anything).Return([]*hcloud.Server{server}, nil)
+
+		resp, err := m.run(ctx)
+		assert.NoError(t, err)
+		assert.False(t, resp.HasChanged(), "should not have changed")
+		assert.False(t, resp.HasFailed(), "should not have failed")
+		serverClientMock.AssertCalled(t, "All", mock.Anything)
+		assert.Equal(t, map[string]interface{}{
+			"servers": []Server{toServer(server)},
+		}, resp.Data())
 	})
 }
 
-func TestIds(t *testing.T) {
-	t.Run("with nil", func(t *testing.T) {
-		n, err := ids(nil)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if n != nil {
-			t.Errorf("should return nil")
-		}
-	})
+func TestPresent(t *testing.T) {
+	client := hcloud.NewClient()
+	client.Server = hcloudtest.NewServerClientMock()
+	client.Image = hcloudtest.NewImageClientMock()
+	client.ServerType = hcloudtest.NewServerTypeClientMock()
 
-	t.Run("with []int", func(t *testing.T) {
-		n, err := ids([]interface{}{1})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if n == nil {
-			t.Errorf("should not return nil")
-		}
-		if len(n) != 1 || n[0] != 1 {
-			t.Errorf("unexpected return value: %v", n)
-		}
-	})
+	m := module{
+		client: client,
+		args: arguments{
+			Token:      "--token--",
+			State:      statePresent,
+			Name:       "test",
+			Image:      "debian-9",
+			ServerType: "cx11",
+		},
+		waitFn: util.WaitFn(func(ctx context.Context, client *hcloud.Client, action *hcloud.Action) error {
+			return nil
+		}),
+	}
 
-	t.Run("with int", func(t *testing.T) {
-		n, err := ids(1)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if n == nil {
-			t.Errorf("should not return nil")
-		}
-		if len(n) != 1 || n[0] != 1 {
-			t.Errorf("unexpected return value: %v", n)
-		}
-	})
+	ctx := context.Background()
 
-	t.Run("with map[string]string", func(t *testing.T) {
-		_, err := ids(map[string]string{})
-		if err == nil {
-			t.Fatalf("expected an error")
-		}
-	})
+	imageClientMock := client.Image.(*hcloudtest.ImageClientMock)
+	imageClientMock.On("GetByName", mock.Anything, mock.Anything).Return(image, nilResponse, nil)
 
-	t.Run("with []string", func(t *testing.T) {
-		_, err := ids([]interface{}{"a", "b"})
-		if err == nil {
-			t.Fatalf("expected an error")
-		}
-	})
+	serverClientMock := client.Server.(*hcloudtest.ServerClientMock)
+	serverClientMock.On("GetByName", mock.Anything, mock.Anything).Return(nilServer, nilResponse, nil).Once()
+	serverClientMock.On("GetByName", mock.Anything, mock.Anything).Return(server, nilResponse, nil)
+	serverClientMock.On("Create", mock.Anything, mock.Anything).Return(hcloud.ServerCreateResult{
+		Server: server,
+		Action: &hcloud.Action{ID: 123},
+	}, nilResponse, nil)
+
+	resp, err := m.run(ctx)
+	assert.NoError(t, err)
+	assert.True(t, resp.HasChanged(), "should have changed")
+	assert.False(t, resp.HasFailed(), "should not have failed")
+	assert.Equal(t, map[string]interface{}{
+		"servers": []Server{toServer(server)},
+	}, resp.Data())
+}
+
+func TestRunning(t *testing.T) {
+	client := hcloud.NewClient()
+	client.Server = hcloudtest.NewServerClientMock()
+	client.Image = hcloudtest.NewImageClientMock()
+	client.ServerType = hcloudtest.NewServerTypeClientMock()
+
+	m := &module{
+		client: client,
+		args: arguments{
+			Token:      "--token--",
+			State:      stateRunning,
+			Name:       "test",
+			Image:      "debian-9",
+			ServerType: "cx11",
+		},
+		waitFn: util.WaitFn(func(ctx context.Context, client *hcloud.Client, action *hcloud.Action) error {
+			return nil
+		}),
+	}
+
+	ctx := context.Background()
+
+	server := *server
+	server.Status = hcloud.ServerStatusOff
+
+	imageClientMock := client.Image.(*hcloudtest.ImageClientMock)
+	imageClientMock.On("GetByName", mock.Anything, mock.Anything).Return(image, nilResponse, nil)
+
+	serverClientMock := client.Server.(*hcloudtest.ServerClientMock)
+	serverClientMock.On("GetByName", mock.Anything, mock.Anything).Return(nilServer, nilResponse, nil).Once()
+	serverClientMock.On("GetByName", mock.Anything, mock.Anything).Return(&server, nilResponse, nil)
+	serverClientMock.On("Create", mock.Anything, mock.Anything).Return(hcloud.ServerCreateResult{
+		Server: &server,
+		Action: &hcloud.Action{ID: 123},
+	}, nilResponse, nil)
+	serverClientMock.On("Poweron", mock.Anything, mock.Anything).Return(&hcloud.Action{}, nilResponse, nil)
+
+	resp, err := m.run(ctx)
+	assert.NoError(t, err)
+	assert.True(t, resp.HasChanged(), "should have changed")
+	assert.False(t, resp.HasFailed(), "should not have failed")
+	assert.Equal(t, map[string]interface{}{
+		"servers": []Server{toServer(&server)},
+	}, resp.Data())
+	serverClientMock.AssertCalled(t, "Poweron", mock.Anything, &server)
+}
+
+func TestStopped(t *testing.T) {
+	client := hcloud.NewClient()
+	client.Server = hcloudtest.NewServerClientMock()
+	client.Image = hcloudtest.NewImageClientMock()
+	client.ServerType = hcloudtest.NewServerTypeClientMock()
+
+	m := &module{
+		client: client,
+		args: arguments{
+			Token:      "--token--",
+			State:      stateStopped,
+			Name:       "test",
+			Image:      "debian-9",
+			ServerType: "cx11",
+		},
+		waitFn: util.WaitFn(func(ctx context.Context, client *hcloud.Client, action *hcloud.Action) error {
+			return nil
+		}),
+	}
+
+	ctx := context.Background()
+
+	server := *server
+	server.Status = hcloud.ServerStatusRunning
+
+	imageClientMock := client.Image.(*hcloudtest.ImageClientMock)
+	imageClientMock.On("GetByName", mock.Anything, mock.Anything).Return(image, nilResponse, nil)
+
+	serverClientMock := client.Server.(*hcloudtest.ServerClientMock)
+	serverClientMock.On("GetByName", mock.Anything, mock.Anything).Return(nilServer, nilResponse, nil).Once()
+	serverClientMock.On("GetByName", mock.Anything, mock.Anything).Return(&server, nilResponse, nil)
+	serverClientMock.On("Create", mock.Anything, mock.Anything).Return(hcloud.ServerCreateResult{
+		Server: &server,
+		Action: &hcloud.Action{ID: 123},
+	}, nilResponse, nil)
+	serverClientMock.On("Poweroff", mock.Anything, mock.Anything).Return(&hcloud.Action{}, nilResponse, nil)
+
+	resp, err := m.run(ctx)
+	assert.NoError(t, err)
+	assert.True(t, resp.HasChanged(), "should have changed")
+	assert.False(t, resp.HasFailed(), "should not have failed")
+	assert.Equal(t, map[string]interface{}{
+		"servers": []Server{toServer(&server)},
+	}, resp.Data())
+	serverClientMock.AssertCalled(t, "Poweroff", mock.Anything, &server)
+}
+
+func TestAbsent(t *testing.T) {
+	client := hcloud.NewClient()
+	client.Server = hcloudtest.NewServerClientMock()
+
+	m := module{
+		client: client,
+		args: arguments{
+			Token: "--token--",
+			State: stateAbsent,
+			ID:    "123",
+		},
+	}
+
+	ctx := context.Background()
+	var response *hcloud.Response
+	serverClientMock := client.Server.(*hcloudtest.ServerClientMock)
+	serverClientMock.On("GetByID", mock.Anything, mock.Anything).Return(server, response, nil)
+	serverClientMock.On("Delete", mock.Anything, mock.Anything).Return(response, nil)
+
+	resp, err := m.run(ctx)
+	assert.NoError(t, err)
+	assert.True(t, resp.HasChanged(), "should have changed")
+	assert.False(t, resp.HasFailed(), "should not have failed")
+	serverClientMock.AssertCalled(t, "GetByID", mock.Anything, 123)
+	serverClientMock.AssertCalled(t, "Delete", mock.Anything, server)
+	assert.Equal(t, map[string]interface{}(nil), resp.Data())
+}
+
+func TestRestarted(t *testing.T) {
+	client := hcloud.NewClient()
+	client.Server = hcloudtest.NewServerClientMock()
+
+	m := module{
+		client: client,
+		args: arguments{
+			Token: "--token--",
+			State: stateRestarted,
+			ID:    "123",
+		},
+		waitFn: util.WaitFn(func(ctx context.Context, client *hcloud.Client, action *hcloud.Action) error {
+			return nil
+		}),
+	}
+
+	ctx := context.Background()
+	var (
+		response *hcloud.Response
+		action   *hcloud.Action
+	)
+	serverClientMock := client.Server.(*hcloudtest.ServerClientMock)
+
+	serverClientMock.On("GetByID", mock.Anything, mock.Anything).Return(server, response, nil)
+	serverClientMock.On("Reboot", mock.Anything, mock.Anything).Return(action, response, nil)
+
+	resp, err := m.run(ctx)
+	assert.NoError(t, err)
+	assert.True(t, resp.HasChanged(), "should have changed")
+	assert.False(t, resp.HasFailed(), "should not have failed")
+	serverClientMock.AssertCalled(t, "GetByID", mock.Anything, 123)
+	serverClientMock.AssertCalled(t, "Reboot", mock.Anything, server)
+	assert.Equal(t, map[string]interface{}{
+		"servers": []Server{toServer(server)},
+	}, resp.Data())
+}
+
+func TestValidateState(t *testing.T) {
+	valid := []string{
+		statePresent,
+		stateAbsent,
+		stateList,
+		stateRestarted,
+		stateRunning,
+		stateStopped,
+	}
+	invalid := []string{
+		"hans",
+		"123",
+	}
+	for _, state := range valid {
+		t.Run(fmt.Sprintf("valid - %q", state), func(t *testing.T) {
+			assert.NoError(t, validateState(state))
+		})
+	}
+	for _, state := range invalid {
+		t.Run(fmt.Sprintf("invalid - %q", state), func(t *testing.T) {
+			assert.Error(t, validateState(state))
+		})
+	}
+}
+
+func TestArgsToConfig(t *testing.T) {
+	client := hcloud.NewClient()
+	m := &module{
+		client: client,
+	}
+
+	c, err := m.argsToConfig(
+		context.Background(),
+		arguments{
+			State:      "present",
+			Token:      "--token--",
+			ID:         1,
+			ServerType: "cx11",
+			UserData:   "--user data--",
+			Rescue:     "linux64",
+		})
+
+	if assert.NoError(t, err) {
+		assert.Equal(t, "present", c.State)
+		assert.Equal(t, "--token--", c.Token)
+		assert.Equal(t, "cx11", c.ServerType)
+		assert.Equal(t, "--user data--", c.UserData)
+		assert.Equal(t, "linux64", c.Rescue)
+	}
+
+	return
 }
