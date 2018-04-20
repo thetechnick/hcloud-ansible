@@ -9,7 +9,7 @@ Manages Hetzner Cloud servers. This module can be used to create, modify, delete
 |parameter|required|default|choices|comments|
 |---------|--------|-------|-------|--------|
 |token|no|||Hetzner Cloud API Token. Can also be specified with `HCLOUD_TOKEN` environment variable. |
-|state|no|present|<ul><li>present</li><li>absent</li><li>running</li><li>stopped</li><li>restarted</li></ul>|  |
+|state|no|present|<ul><li>present</li><li>absent</li><li>running</li><li>stopped</li><li>restarted</li><li>list</li></ul>|  |
 | id | no | | | A single id or list of ids. Either `id` or `name` must be set. |
 | name | no | | | A single name or list of names. Either `id` or `name` must be set. |
 | image | no | | | Required when a server needs to be created. |

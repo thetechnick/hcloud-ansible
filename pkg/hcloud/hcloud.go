@@ -148,6 +148,9 @@ type FloatingIPClient interface {
 // Image alias of hcloud.Image
 type Image = hcloud.Image
 
+// ImageListOpts alias of hcloud.ImageListOpts
+type ImageListOpts = hcloud.ImageListOpts
+
 // ImageClient interface of hcloud.ImageClient
 type ImageClient interface {
 	GetByID(ctx context.Context, id int) (*hcloud.Image, *hcloud.Response, error)
@@ -164,7 +167,9 @@ type ISOClient interface{}
 type Location = hcloud.Location
 
 // LocationClient interface of hcloud.LocationClient
-type LocationClient interface{}
+type LocationClient interface {
+	Get(ctx context.Context, idOrName string) (*hcloud.Location, *hcloud.Response, error)
+}
 
 // PricingClient interface of hcloud.PricingClient
 type PricingClient interface{}
@@ -195,6 +200,18 @@ type ServerCreateOpts = hcloud.ServerCreateOpts
 
 // ServerRescueType alias of hcloud.ServerRescueType
 type ServerRescueType = hcloud.ServerRescueType
+
+// ServerPublicNet alias of hcloud.ServerPublicNet
+type ServerPublicNet = hcloud.ServerPublicNet
+
+// ServerPublicNetIPv4 alias of hcloud.ServerPublicNetIPv4
+type ServerPublicNetIPv4 = hcloud.ServerPublicNetIPv4
+
+// ServerPublicNetIPv6 alias of hcloud.ServerPublicNetIPv6
+type ServerPublicNetIPv6 = hcloud.ServerPublicNetIPv6
+
+// ServerCreateResult alias of hcloud.ServerCreateResult
+type ServerCreateResult = hcloud.ServerCreateResult
 
 // ServerClient interface of hcloud.ServerClient
 type ServerClient interface {
@@ -227,8 +244,13 @@ type ServerClient interface {
 // ServerType alias of hcloud.ServerType
 type ServerType = hcloud.ServerType
 
+// ServerTypeListOpts alias of hcloud.ServerTypeListOpts
+type ServerTypeListOpts = hcloud.ServerTypeListOpts
+
 // ServerTypeClient interface of hcloud.ServerTypeClient
-type ServerTypeClient interface{}
+type ServerTypeClient interface {
+	Get(ctx context.Context, idOrName string) (*hcloud.ServerType, *hcloud.Response, error)
+}
 
 // SSHKey alias of hcloud.SSHKey
 type SSHKey = hcloud.SSHKey
