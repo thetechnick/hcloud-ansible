@@ -24,7 +24,7 @@ type FloatingIP struct {
 	Description  string `json:"description"`
 	IP           string `json:"ip"`
 	Type         string `json:"type"`
-	ServerID     int    `json:"server_id"`
+	ServerID     *int   `json:"server_id"`
 	HomeLocation string `json:"home_location"`
 }
 
@@ -32,19 +32,11 @@ type arguments struct {
 	Token string `json:"token"`
 	State string `json:"state"`
 
-	ID           int         `json:"id"`
+	ID           interface{} `json:"id"`
 	Description  string      `json:"description"`
 	Type         string      `json:"type"`
 	Server       interface{} `json:"server"`
 	HomeLocation string      `json:"home_location"`
-}
-
-type config struct {
-	ID           int
-	Description  string
-	Type         hcloud.FloatingIPType
-	Server       *hcloud.Server
-	HomeLocation string
 }
 
 type module struct {
@@ -89,8 +81,9 @@ func (m *module) run() (resp ansible.ModuleResponse, err error) {
 
 func (m *module) present(ctx context.Context) (resp ansible.ModuleResponse, err error) {
 	var floatingIP *hcloud.FloatingIP
-	if m.args.ID != 0 {
-		if floatingIP, _, err = m.client.FloatingIP.GetByID(ctx, m.args.ID); err != nil {
+	id := util.GetID(m.args.ID)
+	if id != 0 {
+		if floatingIP, _, err = m.client.FloatingIP.GetByID(ctx, id); err != nil {
 			return
 		}
 	}
@@ -180,8 +173,9 @@ func (m *module) present(ctx context.Context) (resp ansible.ModuleResponse, err 
 }
 
 func (m *module) absent(ctx context.Context) (resp ansible.ModuleResponse, err error) {
+	id := util.GetID(m.args.ID)
 	var floatingIP *hcloud.FloatingIP
-	if floatingIP, _, err = m.client.FloatingIP.GetByID(ctx, m.args.ID); err != nil {
+	if floatingIP, _, err = m.client.FloatingIP.GetByID(ctx, id); err != nil {
 		return
 	}
 	if floatingIP == nil {
@@ -248,7 +242,7 @@ func toFloatingIP(ip *hcloud.FloatingIP) FloatingIP {
 		HomeLocation: ip.HomeLocation.Name,
 	}
 	if ip.Server != nil {
-		data.ServerID = ip.Server.ID
+		data.ServerID = &ip.Server.ID
 	}
 	return data
 }
@@ -260,7 +254,7 @@ func validateArgs(args arguments) error {
 		args.State != stateList {
 		errs = append(errs, "'state' must be present, absent or list")
 	}
-	if args.State == statePresent && args.ID == 0 {
+	if args.State == statePresent && args.ID == nil {
 		if args.HomeLocation == "" && args.Server == nil {
 			errs = append(errs, "'home_location' or 'server' must be set")
 		}
@@ -269,7 +263,7 @@ func validateArgs(args arguments) error {
 		}
 	}
 	if args.State == stateAbsent &&
-		args.ID == 0 {
+		args.ID == nil {
 		errs = append(errs, "'id' is required")
 	}
 	if len(errs) > 0 {

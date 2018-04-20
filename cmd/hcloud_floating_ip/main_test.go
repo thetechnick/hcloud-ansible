@@ -356,8 +356,9 @@ func TestValidateArgs(t *testing.T) {
 			err := validateArgs(arguments{
 				State: "absent",
 			})
-			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "'id' is required")
+			if assert.Error(t, err) {
+				assert.Contains(t, err.Error(), "'id' is required")
+			}
 		})
 	})
 
@@ -366,8 +367,9 @@ func TestValidateArgs(t *testing.T) {
 			err := validateArgs(arguments{
 				State: "present",
 			})
-			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "'home_location' or 'server' must be set")
+			if assert.Error(t, err) {
+				assert.Contains(t, err.Error(), "'home_location' or 'server' must be set")
+			}
 		})
 
 		t.Run("home_location and server specified", func(t *testing.T) {
@@ -376,8 +378,9 @@ func TestValidateArgs(t *testing.T) {
 				HomeLocation: "nbg1",
 				Server:       "test",
 			})
-			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "'home_location' and 'server' are mutually exclusive")
+			if assert.Error(t, err) {
+				assert.Contains(t, err.Error(), "'home_location' and 'server' are mutually exclusive")
+			}
 		})
 	})
 }

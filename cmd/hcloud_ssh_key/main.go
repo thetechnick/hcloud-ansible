@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/thetechnick/hcloud-ansible/pkg/ansible"
 	"github.com/thetechnick/hcloud-ansible/pkg/hcloud"
+	"github.com/thetechnick/hcloud-ansible/pkg/util"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -16,9 +17,9 @@ type arguments struct {
 	Token string `json:"token"`
 	State string `json:"state"`
 
-	ID        int    `json:"id"`
-	Name      string `json:"name"`
-	PublicKey string `json:"public_key"`
+	ID        interface{} `json:"id"`
+	Name      string      `json:"name"`
+	PublicKey string      `json:"public_key"`
 }
 
 const (
@@ -160,8 +161,9 @@ func (m *module) present(ctx context.Context) (resp ansible.ModuleResponse, err 
 }
 
 func (m *module) getSSHKey(ctx context.Context) (sshKey *hcloud.SSHKey, err error) {
-	if m.args.ID != 0 {
-		if sshKey, _, err = m.client.SSHKey.GetByID(ctx, m.args.ID); err != nil {
+	id := util.GetID(m.args.ID)
+	if id != 0 {
+		if sshKey, _, err = m.client.SSHKey.GetByID(ctx, id); err != nil {
 			return
 		}
 		return
@@ -188,7 +190,7 @@ func validateArgs(args arguments) error {
 		errs = append(errs, "'state' must be present, absent or list")
 	}
 	if args.State == statePresent {
-		if args.ID != 0 {
+		if args.ID != nil {
 			errs = append(errs, "'id' has no effect")
 		}
 		if args.Name == "" {
@@ -199,7 +201,7 @@ func validateArgs(args arguments) error {
 		}
 	}
 	if args.State == stateAbsent &&
-		args.ID == 0 && args.Name == "" {
+		args.ID == nil && args.Name == "" {
 		errs = append(errs, "'name' or 'id' is required")
 	}
 	if len(errs) > 0 {
