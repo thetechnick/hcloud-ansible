@@ -1,0 +1,47 @@
+# E2E tests
+---
+
+#
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+  #
+  # SSH Key
+  #
+
+  # create an ssh key
+  - hcloud_ssh_key:
+      name: user@example-notebook
+      public_key: "{{lookup('file', '~/.ssh/id_rsa.pub')}}"
+
+  #
+  # Server docs
+  #
+  # create tree servers at once
+  - hcloud_server:
+      name:
+      - example-server01
+      - example-server02
+      - example-server03
+      image: debian-9
+      server_type: cx11
+      location: nbg1
+      ssh_keys:
+      - user@example-notebook   # by name
+
+  # ensure server is running (if the server already exists)
+  - hcloud_server:
+      name: example-server01
+      state: running
+
+  - hcloud_server:
+      state: list
+    register: hcloud_servers
+
+  - debug:
+      var: hcloud_servers
+
+  - hcloud_server:
+      id: "{{ hcloud_servers.servers }}"
+      state: absent

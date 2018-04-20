@@ -81,12 +81,11 @@ func (m *module) Run() (resp ansible.ModuleResponse, err error) {
 	if m.client, err = hcloud.BuildClient(m.args.Token); err != nil {
 		return
 	}
-	m.waitFn = util.WaitForAction
 	return m.run(context.Background())
 }
 
 func (m *module) run(ctx context.Context) (resp ansible.ModuleResponse, err error) {
-	if m.config, err = m.argsToConfig(ctx, m.args); err != nil {
+	if m.config, err = m.argsToConfig(ctx); err != nil {
 		return
 	}
 	if m.args.State == "" {
@@ -456,28 +455,28 @@ func validateState(state string) error {
 	return nil
 }
 
-func (m *module) argsToConfig(ctx context.Context, args arguments) (
+func (m *module) argsToConfig(ctx context.Context) (
 	c config,
 	err error,
 ) {
-	c.Token = args.Token
+	c.Token = m.args.Token
 
 	if m.args.State == "" {
 		m.args.State = statePresent
 	}
-	if err = validateState(args.State); err != nil {
+	if err = validateState(m.args.State); err != nil {
 		return
 	}
-	c.State = args.State
+	c.State = m.args.State
 
-	c.Name = util.GetNames(args.Name)
-	c.ID = util.GetIDs(args.ID)
-	c.ServerType = args.ServerType
-	c.UserData = args.UserData
-	c.Rescue = args.Rescue
+	c.Name = util.GetNames(m.args.Name)
+	c.ID = util.GetIDs(m.args.ID)
+	c.ServerType = m.args.ServerType
+	c.UserData = m.args.UserData
+	c.Rescue = m.args.Rescue
 
 	// Image
-	if imageID := util.GetID(args.Image); imageID != 0 {
+	if imageID := util.GetID(m.args.Image); imageID != 0 {
 		c.Image, _, err = m.client.Image.GetByID(ctx, imageID)
 		if err != nil {
 			return
@@ -487,7 +486,7 @@ func (m *module) argsToConfig(ctx context.Context, args arguments) (
 			return
 		}
 	}
-	if imageName := util.GetName(args.Image); imageName != "" {
+	if imageName := util.GetName(m.args.Image); imageName != "" {
 		c.Image, _, err = m.client.Image.GetByName(ctx, imageName)
 		if err != nil {
 			return
@@ -497,32 +496,47 @@ func (m *module) argsToConfig(ctx context.Context, args arguments) (
 			return
 		}
 	}
-	if c.Image == nil && args.Image != nil {
-		err = fmt.Errorf("image unknown format: %v", args.Image)
+	if c.Image == nil && m.args.Image != nil {
+		err = fmt.Errorf("image unknown format: %v", m.args.Image)
 		return
 	}
 
 	// Datacenter
-	if args.Datacenter != "" {
-		c.Datacenter, _, err = m.client.Datacenter.Get(ctx, args.Datacenter)
+	if m.args.Datacenter != "" {
+		c.Datacenter, _, err = m.client.Datacenter.Get(ctx, m.args.Datacenter)
 		if err != nil {
 			return
 		}
 		if c.Datacenter == nil {
-			err = fmt.Errorf("datacenter '%s' not found", args.Datacenter)
+			err = fmt.Errorf("datacenter '%s' not found", m.args.Datacenter)
 			return
 		}
 	}
 
 	// Location
-	if args.Location != "" {
-		c.Location, _, err = m.client.Location.Get(ctx, args.Location)
+	if m.args.Location != "" {
+		c.Location, _, err = m.client.Location.Get(ctx, m.args.Location)
 		if err != nil {
 			return
 		}
 		if c.Location == nil {
-			err = fmt.Errorf("location '%s' not found", args.Location)
+			err = fmt.Errorf("location '%s' not found", m.args.Location)
 			return
+		}
+	}
+
+	if m.args.SSHKeys != nil {
+		ids := util.GetIdentifiers(m.args.SSHKeys)
+		for _, id := range ids {
+			var sshKey *hcloud.SSHKey
+			if sshKey, _, err = m.client.SSHKey.Get(ctx, id); err != nil {
+				return
+			}
+			if sshKey == nil {
+				err = fmt.Errorf("SSH Key %q not found", id)
+				return
+			}
+			c.SSHKeys = append(c.SSHKeys, sshKey)
 		}
 	}
 
@@ -541,7 +555,7 @@ func toServer(server *hcloud.Server) Server {
 		PublicIPv6: server.PublicNet.IPv6.Network.String()}
 }
 
-var flags = pflag.NewFlagSet("hcloud_floating_ip", pflag.ContinueOnError)
+var flags = pflag.NewFlagSet("hcloud_server", pflag.ContinueOnError)
 
 func init() {
 	flags.BoolP("version", "v", false, "Print version and exit")

@@ -68,6 +68,8 @@ func NewClient(options ...hcloud.ClientOption) *Client {
 		SSHKey:     &c.SSHKey,
 		Image:      &c.Image,
 		FloatingIP: &c.FloatingIP,
+		Location:   &c.Location,
+		Datacenter: &c.Datacenter,
 	}
 }
 

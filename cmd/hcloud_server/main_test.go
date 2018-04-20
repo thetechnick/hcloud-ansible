@@ -337,18 +337,17 @@ func TestArgsToConfig(t *testing.T) {
 	client := hcloud.NewClient()
 	m := &module{
 		client: client,
-	}
-
-	c, err := m.argsToConfig(
-		context.Background(),
-		arguments{
+		args: arguments{
 			State:      "present",
 			Token:      "--token--",
 			ID:         1,
 			ServerType: "cx11",
 			UserData:   "--user data--",
 			Rescue:     "linux64",
-		})
+		},
+	}
+
+	c, err := m.argsToConfig(context.Background())
 
 	if assert.NoError(t, err) {
 		assert.Equal(t, "present", c.State)

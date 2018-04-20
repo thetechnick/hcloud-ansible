@@ -85,4 +85,9 @@ servers:
     ssh_keys:                 # rescue os will be configured with these ssh keys
     - user@example-notebook   # by name
     - 1234                    # by id
+
+# list all servers
+- hcloud_server:
+    state: list
+  register: hcloud_servers
 ```

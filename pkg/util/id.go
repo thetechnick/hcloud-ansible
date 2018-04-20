@@ -4,6 +4,42 @@ import (
 	"strconv"
 )
 
+// GetIdentifiers returns a list of strings for client.Get methods
+func GetIdentifiers(value interface{}) (ids []string) {
+	if s, ok := value.([]interface{}); ok {
+		for _, v := range s {
+			n := GetIdentifier(v)
+			if n != "" {
+				ids = append(ids, n)
+			}
+		}
+	} else {
+		n := GetIdentifier(value)
+		if n != "" {
+			ids = append(ids, n)
+		}
+	}
+	return
+}
+
+// GetIdentifier parses the input to get a resource identifier for client.Get
+func GetIdentifier(value interface{}) (id string) {
+	switch v := value.(type) {
+	case string:
+		return v
+	case float64:
+		return strconv.Itoa(int(v))
+	case map[string]interface{}:
+		if id, ok := v["id"]; ok {
+			return GetIdentifier(id)
+		}
+		if name, ok := v["name"]; ok {
+			return GetIdentifier(name)
+		}
+	}
+	return
+}
+
 // GetIDs parses the input to get resource ids
 func GetIDs(value interface{}) (ids []int) {
 	if i, ok := value.([]interface{}); ok {
