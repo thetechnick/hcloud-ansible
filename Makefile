@@ -20,6 +20,11 @@ bin/%:
 test:
 	@./scripts/test
 
+acceptance-test: build
+	@rm -rf library
+	@cp -a bin library
+	ansible-playbook test.yml
+
 clean:
 	@rm -rf bin
 
@@ -68,4 +73,4 @@ _output/hcloud-ansible_%.zip: \
 	cp bin/$*/hcloud_floating_ip bin/$*/hcloud_server bin/$*/hcloud_ssh_key bin/$*/hcloud_inventory README.md LICENSE $(DEST)
 	cd $(DEST) && zip -r ../$(NAME).zip .
 
-.PHONY: all build clean test release
+.PHONY: all build clean test release acceptance-test
