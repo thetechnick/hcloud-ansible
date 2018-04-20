@@ -7,6 +7,54 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestGetIdentifiers(t *testing.T) {
+	t.Run("[]string", func(t *testing.T) {
+		var value interface{}
+		json.Unmarshal([]byte(`["test1", "test2"]`), &value)
+
+		names := GetIdentifiers(value)
+		assert.Equal(t, []string{"test1", "test2"}, names)
+	})
+	t.Run("string", func(t *testing.T) {
+		var value interface{}
+		json.Unmarshal([]byte(`"test1"`), &value)
+
+		names := GetIdentifiers(value)
+		assert.Equal(t, []string{"test1"}, names)
+	})
+}
+
+func TestGetIdentifier(t *testing.T) {
+	t.Run("string", func(t *testing.T) {
+		var value interface{}
+		json.Unmarshal([]byte(`"test"`), &value)
+
+		name := GetIdentifier(value)
+		assert.Equal(t, "test", name)
+	})
+	t.Run("int", func(t *testing.T) {
+		var value interface{}
+		json.Unmarshal([]byte(`1`), &value)
+
+		name := GetIdentifier(value)
+		assert.Equal(t, "1", name)
+	})
+	t.Run("object id", func(t *testing.T) {
+		var value interface{}
+		json.Unmarshal([]byte(`{"id":123}`), &value)
+
+		id := GetIdentifier(value)
+		assert.Equal(t, "123", id)
+	})
+	t.Run("object name", func(t *testing.T) {
+		var value interface{}
+		json.Unmarshal([]byte(`{"name":"test"}`), &value)
+
+		id := GetIdentifier(value)
+		assert.Equal(t, "test", id)
+	})
+}
+
 func TestGetNames(t *testing.T) {
 	t.Run("[]string", func(t *testing.T) {
 		var value interface{}
