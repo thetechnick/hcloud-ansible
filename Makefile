@@ -35,19 +35,24 @@ release: \
 	clean \
 	clean-release \
 	_output/hcloud-ansible_linux_amd64.zip \
-	_output/hcloud-ansible_linux_386.zip
+	_output/hcloud-ansible_linux_386.zip \
+	_output/hcloud-ansible_darwin_amd64.zip
 
 bin/linux_amd64/hcloud_server:  GOARGS = GOOS=linux GOARCH=amd64
 bin/linux_386/hcloud_server:  GOARGS = GOOS=linux GOARCH=386
+bin/darwin_amd64/hcloud_server:  GOARGS = GOOS=darwin GOARCH=amd64
 
 bin/linux_amd64/hcloud_ssh_key:  GOARGS = GOOS=linux GOARCH=amd64
 bin/linux_386/hcloud_ssh_key:  GOARGS = GOOS=linux GOARCH=386
+bin/darwin_amd64/hcloud_ssh_key:  GOARGS = GOOS=darwin GOARCH=amd64
 
 bin/linux_amd64/hcloud_floating_ip:  GOARGS = GOOS=linux GOARCH=amd64
 bin/linux_386/hcloud_floating_ip:  GOARGS = GOOS=linux GOARCH=386
+bin/darwin_amd64/hcloud_floating_ip:  GOARGS = GOOS=darwin GOARCH=amd64
 
 bin/linux_amd64/hcloud_inventory:  GOARGS = GOOS=linux GOARCH=amd64
 bin/linux_386/hcloud_inventory:  GOARGS = GOOS=linux GOARCH=386
+bin/darwin_amd64/hcloud_inventory:  GOARGS = GOOS=darwin GOARCH=amd64
 
 bin/%/hcloud_server: clean
 	$(GOARGS) go build -o $@ -ldflags $(LD_FLAGS) -a $(REPO)/cmd/hcloud_server
