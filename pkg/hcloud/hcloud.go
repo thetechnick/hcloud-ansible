@@ -78,6 +78,11 @@ func String(s string) *string {
 	return hcloud.String(s)
 }
 
+// Bool alias of hcloud.Bool
+func Bool(b bool) *bool {
+	return hcloud.Bool(b)
+}
+
 // Action alias of hcloud.Action
 type Action = hcloud.Action
 
