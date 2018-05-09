@@ -202,6 +202,7 @@ func (m *module) ensureServer(ctx context.Context, resp *ansible.ModuleResponse,
 		if _, err = m.client.Server.Delete(ctx, server); err != nil {
 			return
 		}
+		m.messages.Add(fmt.Sprintf("Server %d deleted (needs recreate)", server.ID))
 		server = nil
 		resp.Changed()
 	}
@@ -221,12 +222,16 @@ func (m *module) ensureServer(ctx context.Context, resp *ansible.ModuleResponse,
 		resp.Changed()
 		opts := hcloud.ServerCreateOpts{
 			Name: name,
+
 			ServerType: &hcloud.ServerType{
 				Name: m.config.ServerType,
 			},
 			UserData: m.config.UserData,
 			SSHKeys:  m.config.SSHKeys,
 			Image:    m.config.Image,
+		}
+		if m.config.State == stateStopped {
+			opts.StartAfterCreate = hcloud.Bool(false)
 		}
 		if m.config.Datacenter != nil {
 			opts.Datacenter = m.config.Datacenter

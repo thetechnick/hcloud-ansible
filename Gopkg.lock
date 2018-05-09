@@ -13,8 +13,8 @@
     "hcloud",
     "hcloud/schema"
   ]
-  revision = "b37849e439d7a02b07d495f65e7b797bec30eeae"
-  version = "v1.4.0"
+  revision = "f4c8a4379a2c0a24e9c4fc242be72b9110e1426d"
+  version = "v1.7.0"
 
 [[projects]]
   name = "github.com/pmezard/go-difflib"
@@ -25,8 +25,8 @@
 [[projects]]
   name = "github.com/spf13/pflag"
   packages = ["."]
-  revision = "e57e3eeb33f795204c1ca35f56c44f83227c6e66"
-  version = "v1.0.0"
+  revision = "583c0c0531f06d5278b7d917446061adc344b5cd"
+  version = "v1.0.1"
 
 [[projects]]
   name = "github.com/stretchr/objx"
@@ -54,11 +54,11 @@
     "poly1305",
     "ssh"
   ]
-  revision = "91a49db82a88618983a78a06c1cbd4e00ab749ab"
+  revision = "21052ae46654ecf18dfdba0f7c12701a1e2b3164"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "0cdaa3a93401d802f5c09870ef3f9d27d08e15f23353e5b2991538b571fa0e81"
+  inputs-digest = "66b691b7aee3c0874aecd2f3ebaad6ff8de3c04818556ab41e23b77bc11177b4"
   solver-name = "gps-cdcl"
   solver-version = 1
