@@ -70,6 +70,7 @@ func NewClient(options ...hcloud.ClientOption) *Client {
 		FloatingIP: &c.FloatingIP,
 		Location:   &c.Location,
 		Datacenter: &c.Datacenter,
+		ISO:        &c.ISO,
 	}
 }
 
@@ -167,8 +168,15 @@ type ImageClient interface {
 	All(ctx context.Context) ([]*hcloud.Image, error)
 }
 
+// ISO alias of hcloud.ISO
+type ISO = hcloud.ISO
+
 // ISOClient interface of hcloud.ISOClient
-type ISOClient interface{}
+type ISOClient interface {
+	GetByID(ctx context.Context, id int) (*hcloud.ISO, *hcloud.Response, error)
+	GetByName(ctx context.Context, name string) (*hcloud.ISO, *hcloud.Response, error)
+	Get(ctx context.Context, idOrName string) (*hcloud.ISO, *hcloud.Response, error)
+}
 
 // Location alias of hcloud.Location
 type Location = hcloud.Location
@@ -189,8 +197,8 @@ type ServerStatus = hcloud.ServerStatus
 
 // ServerStatus alias of hcloud.ServerStatus*
 var (
-	ServerStatusOff     ServerStatus = hcloud.ServerStatusOff
-	ServerStatusRunning ServerStatus = hcloud.ServerStatusRunning
+	ServerStatusOff     = hcloud.ServerStatusOff
+	ServerStatusRunning = hcloud.ServerStatusRunning
 )
 
 // ServerUpdateOpts alias of hcloud.ServerUpdateOpts
@@ -222,30 +230,32 @@ type ServerCreateResult = hcloud.ServerCreateResult
 
 // ServerClient interface of hcloud.ServerClient
 type ServerClient interface {
-	GetByID(ctx context.Context, id int) (*hcloud.Server, *hcloud.Response, error)
-	GetByName(ctx context.Context, name string) (*hcloud.Server, *hcloud.Response, error)
-	Get(ctx context.Context, idOrName string) (*hcloud.Server, *hcloud.Response, error)
-	// List(ctx context.Context, opts hcloud.ServerListOpts) ([]*hcloud.Server, *hcloud.Response, error)
-	All(ctx context.Context) ([]*hcloud.Server, error)
-	Create(ctx context.Context, opts hcloud.ServerCreateOpts) (hcloud.ServerCreateResult, *hcloud.Response, error)
-	Delete(ctx context.Context, server *hcloud.Server) (*hcloud.Response, error)
-	Update(ctx context.Context, server *hcloud.Server, opts hcloud.ServerUpdateOpts) (*hcloud.Server, *hcloud.Response, error)
-	Poweron(ctx context.Context, server *hcloud.Server) (*hcloud.Action, *hcloud.Response, error)
-	Reboot(ctx context.Context, server *hcloud.Server) (*hcloud.Action, *hcloud.Response, error)
-	Reset(ctx context.Context, server *hcloud.Server) (*hcloud.Action, *hcloud.Response, error)
-	// Shutdown(ctx context.Context, server *hcloud.Server) (*hcloud.Action, *hcloud.Response, error)
-	Poweroff(ctx context.Context, server *hcloud.Server) (*hcloud.Action, *hcloud.Response, error)
-	// ResetPassword(ctx context.Context, server *hcloud.Server) (hcloud.ServerResetPasswordResult, *hcloud.Response, error)
-	// CreateImage(ctx context.Context, server *hcloud.Server, opts *hcloud.ServerCreateImageOpts) (hcloud.ServerCreateImageResult, *hcloud.Response, error)
-	EnableRescue(ctx context.Context, server *hcloud.Server, opts hcloud.ServerEnableRescueOpts) (hcloud.ServerEnableRescueResult, *hcloud.Response, error)
-	DisableRescue(ctx context.Context, server *hcloud.Server) (*hcloud.Action, *hcloud.Response, error)
-	// Rebuild(ctx context.Context, server *hcloud.Server, opts hcloud.ServerRebuildOpts) (*hcloud.Action, *hcloud.Response, error)
-	// AttachISO(ctx context.Context, server *hcloud.Server, iso *hcloud.ISO) (*hcloud.Action, *hcloud.Response, error)
-	// DetachISO(ctx context.Context, server *hcloud.Server) (*hcloud.Action, *hcloud.Response, error)
-	EnableBackup(ctx context.Context, server *hcloud.Server, window string) (*hcloud.Action, *hcloud.Response, error)
-	DisableBackup(ctx context.Context, server *hcloud.Server) (*hcloud.Action, *hcloud.Response, error)
-	// ChangeType(ctx context.Context, server *hcloud.Server, opts hcloud.ServerChangeTypeOpts) (*hcloud.Action, *hcloud.Response, error)
-	// ChangeDNSPtr(ctx context.Context, server *hcloud.Server, ip string, ptr *string) (*hcloud.Action, *hcloud.Response, error)
+	GetByID(ctx context.Context, id int) (*Server, *Response, error)
+	GetByName(ctx context.Context, name string) (*Server, *Response, error)
+	Get(ctx context.Context, idOrName string) (*Server, *Response, error)
+	// List(ctx context.Context, opts ServerListOpts) ([]*Server, *Response, error)
+	All(ctx context.Context) ([]*Server, error)
+	Create(ctx context.Context, opts ServerCreateOpts) (ServerCreateResult, *Response, error)
+	Delete(ctx context.Context, server *Server) (*Response, error)
+	Update(ctx context.Context, server *Server, opts ServerUpdateOpts) (*Server, *Response, error)
+	Poweron(ctx context.Context, server *Server) (*Action, *Response, error)
+	Reboot(ctx context.Context, server *Server) (*Action, *Response, error)
+	Reset(ctx context.Context, server *Server) (*Action, *Response, error)
+	// Shutdown(ctx context.Context, server *Server) (*Action, *Response, error)
+	Poweroff(ctx context.Context, server *Server) (*Action, *Response, error)
+	// ResetPassword(ctx context.Context, server *Server) (ServerResetPasswordResult, *Response, error)
+	// CreateImage(ctx context.Context, server *Server, opts *ServerCreateImageOpts) (ServerCreateImageResult, *Response, error)
+	AttachISO(ctx context.Context, server *Server, iso *ISO) (*Action, *Response, error)
+	DetachISO(ctx context.Context, server *Server) (*Action, *Response, error)
+	EnableRescue(ctx context.Context, server *Server, opts ServerEnableRescueOpts) (ServerEnableRescueResult, *Response, error)
+	DisableRescue(ctx context.Context, server *Server) (*Action, *Response, error)
+	// Rebuild(ctx context.Context, server *Server, opts ServerRebuildOpts) (*Action, *Response, error)
+	// AttachISO(ctx context.Context, server *Server, iso *ISO) (*Action, *Response, error)
+	// DetachISO(ctx context.Context, server *Server) (*Action, *Response, error)
+	EnableBackup(ctx context.Context, server *Server, window string) (*Action, *Response, error)
+	DisableBackup(ctx context.Context, server *Server) (*Action, *Response, error)
+	// ChangeType(ctx context.Context, server *Server, opts ServerChangeTypeOpts) (*Action, *Response, error)
+	// ChangeDNSPtr(ctx context.Context, server *Server, ip string, ptr *string) (*Action, *Response, error)
 }
 
 // ServerType alias of hcloud.ServerType
@@ -256,7 +266,7 @@ type ServerTypeListOpts = hcloud.ServerTypeListOpts
 
 // ServerTypeClient interface of hcloud.ServerTypeClient
 type ServerTypeClient interface {
-	Get(ctx context.Context, idOrName string) (*hcloud.ServerType, *hcloud.Response, error)
+	Get(ctx context.Context, idOrName string) (*ServerType, *Response, error)
 }
 
 // SSHKey alias of hcloud.SSHKey
@@ -270,11 +280,11 @@ type SSHKeyCreateOpts = hcloud.SSHKeyCreateOpts
 
 // SSHKeyClient interface of hcloud.SSHKeyClient
 type SSHKeyClient interface {
-	GetByID(ctx context.Context, id int) (*hcloud.SSHKey, *hcloud.Response, error)
-	GetByName(ctx context.Context, name string) (*hcloud.SSHKey, *hcloud.Response, error)
-	Get(ctx context.Context, idOrName string) (*hcloud.SSHKey, *hcloud.Response, error)
-	All(ctx context.Context) ([]*hcloud.SSHKey, error)
-	Create(ctx context.Context, opts hcloud.SSHKeyCreateOpts) (*hcloud.SSHKey, *hcloud.Response, error)
-	Delete(ctx context.Context, sshKey *hcloud.SSHKey) (*hcloud.Response, error)
-	Update(ctx context.Context, sshKey *hcloud.SSHKey, opts hcloud.SSHKeyUpdateOpts) (*hcloud.SSHKey, *hcloud.Response, error)
+	GetByID(ctx context.Context, id int) (*SSHKey, *Response, error)
+	GetByName(ctx context.Context, name string) (*SSHKey, *Response, error)
+	Get(ctx context.Context, idOrName string) (*SSHKey, *Response, error)
+	All(ctx context.Context) ([]*SSHKey, error)
+	Create(ctx context.Context, opts SSHKeyCreateOpts) (*SSHKey, *Response, error)
+	Delete(ctx context.Context, sshKey *SSHKey) (*Response, error)
+	Update(ctx context.Context, sshKey *SSHKey, opts SSHKeyUpdateOpts) (*SSHKey, *Response, error)
 }

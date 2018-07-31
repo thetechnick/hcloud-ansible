@@ -26,6 +26,7 @@ type arguments struct {
 	Location   string      `json:"location"`
 	Rescue     string      `json:"rescue"`
 	SSHKeys    interface{} `json:"ssh_keys"`
+	ISO        interface{} `json:"iso"`
 }
 
 const (
@@ -44,6 +45,7 @@ type config struct {
 	Name       []string
 	ID         []int
 	Image      *hcloud.Image
+	ISO        *hcloud.ISO
 	ServerType string
 	UserData   string
 	Datacenter *hcloud.Datacenter
@@ -61,6 +63,7 @@ type Server struct {
 	Status     string `json:"status"`
 	Datacenter string `json:"datacenter"`
 	Location   string `json:"location"`
+	ISO        string `json:"iso"`
 	PublicIPv4 string `json:"public_ipv4"`
 	PublicIPv6 string `json:"public_ipv6"`
 }
@@ -290,6 +293,33 @@ func (m *module) ensureServer(ctx context.Context, resp *ansible.ModuleResponse,
 		}
 	}
 
+	if server.ISO != nil &&
+		(m.config.ISO == nil || m.config.ISO.ID != server.ISO.ID) {
+		var action *hcloud.Action
+		if action, _, err = m.client.Server.DetachISO(ctx, server); err != nil {
+			return
+		}
+		if err = m.waitFn(ctx, m.client, action); err != nil {
+			return
+		}
+		m.messages.Add(fmt.Sprintf("Server %d ISO %d detached", server.ID, server.ISO.ID))
+		resp.Changed()
+		server.ISO = nil
+	}
+	if server.ISO == nil && m.config.ISO != nil {
+		var action *hcloud.Action
+		if action, _, err = m.client.Server.AttachISO(ctx, server, m.config.ISO); err != nil {
+			return
+		}
+
+		if err = m.waitFn(ctx, m.client, action); err != nil {
+			return
+		}
+		m.messages.Add(fmt.Sprintf("Server %d ISO %d attached", server.ID, m.config.ISO.ID))
+		resp.Changed()
+		server.ISO = m.config.ISO
+	}
+
 	var rescueChanged bool
 	if server.RescueEnabled && m.config.Rescue == "" {
 		var action *hcloud.Action
@@ -506,6 +536,34 @@ func (m *module) argsToConfig(ctx context.Context) (
 		return
 	}
 
+	// ISO
+	if m.args.ISO != nil {
+		if isoID := util.GetID(m.args.ISO); isoID != 0 {
+			c.ISO, _, err = m.client.ISO.GetByID(ctx, isoID)
+			if err != nil {
+				return
+			}
+			if c.ISO == nil {
+				err = fmt.Errorf("requested ISO with id %d not found", isoID)
+				return
+			}
+		}
+		if isoName := util.GetName(m.args.Image); isoName != "" {
+			c.ISO, _, err = m.client.ISO.GetByName(ctx, isoName)
+			if err != nil {
+				return
+			}
+			if c.ISO == nil {
+				err = fmt.Errorf("requested ISO with name %s not found", isoName)
+				return
+			}
+		}
+		if c.ISO == nil {
+			err = fmt.Errorf("iso unknown format: %v", m.args.ISO)
+			return
+		}
+	}
+
 	// Datacenter
 	if m.args.Datacenter != "" {
 		c.Datacenter, _, err = m.client.Datacenter.Get(ctx, m.args.Datacenter)
@@ -549,7 +607,7 @@ func (m *module) argsToConfig(ctx context.Context) (
 }
 
 func toServer(server *hcloud.Server) Server {
-	return Server{
+	s := Server{
 		ID:         server.ID,
 		Name:       server.Name,
 		Status:     string(server.Status),
@@ -557,7 +615,12 @@ func toServer(server *hcloud.Server) Server {
 		Datacenter: server.Datacenter.Name,
 		Location:   server.Datacenter.Location.Name,
 		PublicIPv4: server.PublicNet.IPv4.IP.String(),
-		PublicIPv6: server.PublicNet.IPv6.Network.String()}
+		PublicIPv6: server.PublicNet.IPv6.Network.String(),
+	}
+	if server.ISO != nil {
+		s.ISO = server.ISO.Name
+	}
+	return s
 }
 
 var flags = pflag.NewFlagSet("hcloud_server", pflag.ContinueOnError)

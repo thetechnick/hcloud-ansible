@@ -19,6 +19,7 @@ Manages Hetzner Cloud servers. This module can be used to create, modify, delete
 | location | no | | | Mutually exclusive with `datacenter` |
 | rescue | no | | <ul><li>linux64</li><li>linux32</li><li>freebsd64</li></ul> | Will make sure the choosen rescue system is enabled. Automatically resets the server to boot into the rescue system if `state != stopped`. |
 | ssh_keys | no | | | List of Hetzner Cloud SSHKey ids, names or dict containing the `id` or `name`. |
+| iso | no | | | `name` or `id` of the iso image to attach. |
 
 ## Return Values
 

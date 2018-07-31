@@ -107,3 +107,15 @@ func (m *ServerClientMock) DisableBackup(ctx context.Context, server *hcloud.Ser
 	args := m.Called(ctx, server)
 	return args.Get(0).(*hcloud.Action), args.Get(1).(*hcloud.Response), args.Error(2)
 }
+
+// AttachISO mock
+func (m *ServerClientMock) AttachISO(ctx context.Context, server *hcloud.Server, iso *hcloud.ISO) (*hcloud.Action, *hcloud.Response, error) {
+	args := m.Called(ctx, server, iso)
+	return args.Get(0).(*hcloud.Action), args.Get(1).(*hcloud.Response), args.Error(2)
+}
+
+// DetachISO mock
+func (m *ServerClientMock) DetachISO(ctx context.Context, server *hcloud.Server) (*hcloud.Action, *hcloud.Response, error) {
+	args := m.Called(ctx, server)
+	return args.Get(0).(*hcloud.Action), args.Get(1).(*hcloud.Response), args.Error(2)
+}

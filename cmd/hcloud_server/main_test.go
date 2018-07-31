@@ -16,6 +16,7 @@ import (
 var (
 	server      *hcloud.Server
 	image       *hcloud.Image
+	iso         *hcloud.ISO
 	nilServer   *hcloud.Server
 	nilResponse *hcloud.Response
 )
@@ -43,6 +44,10 @@ func init() {
 		},
 	}
 
+	iso = &hcloud.ISO{
+		ID:   456,
+		Name: "test.iso",
+	}
 }
 
 func TestList(t *testing.T) {
@@ -151,6 +156,102 @@ func TestPresent(t *testing.T) {
 	assert.Equal(t, map[string]interface{}{
 		"servers": []Server{toServer(server)},
 	}, resp.Data())
+
+	t.Run("attach ISO", func(t *testing.T) {
+		client := hcloud.NewClient()
+		client.Server = hcloudtest.NewServerClientMock()
+		client.Image = hcloudtest.NewImageClientMock()
+		client.ServerType = hcloudtest.NewServerTypeClientMock()
+		client.ISO = hcloudtest.NewISOClientMock()
+
+		m := module{
+			client: client,
+			args: arguments{
+				Token:      "--token--",
+				State:      statePresent,
+				Name:       "test",
+				Image:      "debian-9",
+				ServerType: "cx11",
+				ISO:        "test.iso",
+			},
+			waitFn: util.WaitFn(func(ctx context.Context, client *hcloud.Client, action *hcloud.Action) error {
+				return nil
+			}),
+		}
+
+		ctx := context.Background()
+		server := *server
+
+		imageClientMock := client.Image.(*hcloudtest.ImageClientMock)
+		imageClientMock.On("GetByName", mock.Anything, mock.Anything).Return(image, nilResponse, nil)
+
+		serverClientMock := client.Server.(*hcloudtest.ServerClientMock)
+		serverClientMock.On("GetByName", mock.Anything, mock.Anything).Return(&server, nilResponse, nil)
+		serverClientMock.On("Create", mock.Anything, mock.Anything).Return(hcloud.ServerCreateResult{
+			Server: &server,
+			Action: &hcloud.Action{ID: 123},
+		}, nilResponse, nil)
+		serverClientMock.On("AttachISO", mock.Anything, mock.Anything, mock.Anything).Return(&hcloud.Action{ID: 123}, nilResponse, nil)
+
+		isoClientMock := client.ISO.(*hcloudtest.ISOClientMock)
+		isoClientMock.On("GetByName", mock.Anything, mock.Anything).Return(iso, nilResponse, nil)
+
+		resp, err := m.run(ctx)
+		assert.NoError(t, err)
+		assert.True(t, resp.HasChanged(), "should have changed")
+		assert.False(t, resp.HasFailed(), "should not have failed")
+		assert.Equal(t, map[string]interface{}{
+			"servers": []Server{toServer(&server)},
+		}, resp.Data())
+	})
+
+	t.Run("detach ISO", func(t *testing.T) {
+		client := hcloud.NewClient()
+		client.Server = hcloudtest.NewServerClientMock()
+		client.Image = hcloudtest.NewImageClientMock()
+		client.ServerType = hcloudtest.NewServerTypeClientMock()
+		client.ISO = hcloudtest.NewISOClientMock()
+
+		m := module{
+			client: client,
+			args: arguments{
+				Token:      "--token--",
+				State:      statePresent,
+				Name:       "test",
+				Image:      "debian-9",
+				ServerType: "cx11",
+			},
+			waitFn: util.WaitFn(func(ctx context.Context, client *hcloud.Client, action *hcloud.Action) error {
+				return nil
+			}),
+		}
+
+		ctx := context.Background()
+		server := *server
+		server.ISO = iso
+
+		imageClientMock := client.Image.(*hcloudtest.ImageClientMock)
+		imageClientMock.On("GetByName", mock.Anything, mock.Anything).Return(image, nilResponse, nil)
+
+		serverClientMock := client.Server.(*hcloudtest.ServerClientMock)
+		serverClientMock.On("GetByName", mock.Anything, mock.Anything).Return(&server, nilResponse, nil)
+		serverClientMock.On("Create", mock.Anything, mock.Anything).Return(hcloud.ServerCreateResult{
+			Server: &server,
+			Action: &hcloud.Action{ID: 123},
+		}, nilResponse, nil)
+		serverClientMock.On("DetachISO", mock.Anything, mock.Anything).Return(&hcloud.Action{ID: 123}, nilResponse, nil)
+
+		isoClientMock := client.ISO.(*hcloudtest.ISOClientMock)
+		isoClientMock.On("GetByName", mock.Anything, mock.Anything).Return(iso, nilResponse, nil)
+
+		resp, err := m.run(ctx)
+		assert.NoError(t, err)
+		assert.True(t, resp.HasChanged(), "should have changed")
+		assert.False(t, resp.HasFailed(), "should not have failed")
+		assert.Equal(t, map[string]interface{}{
+			"servers": []Server{toServer(&server)},
+		}, resp.Data())
+	})
 }
 
 func TestRunning(t *testing.T) {
