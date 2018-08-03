@@ -489,10 +489,7 @@ func validateState(state string) error {
 	return nil
 }
 
-func (m *module) argsToConfig(ctx context.Context) (
-	c config,
-	err error,
-) {
+func (m *module) argsToConfig(ctx context.Context) (c config, err error) {
 	c.Token = m.args.Token
 
 	if m.args.State == "" {
@@ -547,7 +544,7 @@ func (m *module) argsToConfig(ctx context.Context) (
 				return
 			}
 		}
-		if isoName := util.GetName(m.args.Image); isoName != "" {
+		if isoName := util.GetName(m.args.ISO); isoName != "" {
 			c.ISO, _, err = m.client.ISO.GetByName(ctx, isoName)
 			if err != nil {
 				return
@@ -557,7 +554,7 @@ func (m *module) argsToConfig(ctx context.Context) (
 				return
 			}
 		}
-		if c.ISO == nil {
+		if c.ISO == nil && m.args.ISO != nil {
 			err = fmt.Errorf("iso unknown format: %v", m.args.ISO)
 			return
 		}

@@ -496,6 +496,10 @@ func TestValidateState(t *testing.T) {
 
 func TestArgsToConfig(t *testing.T) {
 	client := hcloud.NewClient()
+	client.ISO = hcloudtest.NewISOClientMock()
+	isoClientMock := client.ISO.(*hcloudtest.ISOClientMock)
+	isoClientMock.On("GetByName", mock.Anything, mock.Anything).Return(iso, nilResponse, nil)
+
 	m := &module{
 		client: client,
 		args: arguments{
@@ -505,6 +509,7 @@ func TestArgsToConfig(t *testing.T) {
 			ServerType: "cx11",
 			UserData:   "--user data--",
 			Rescue:     "linux64",
+			ISO:        "test.iso",
 		},
 	}
 
@@ -516,7 +521,7 @@ func TestArgsToConfig(t *testing.T) {
 		assert.Equal(t, "cx11", c.ServerType)
 		assert.Equal(t, "--user data--", c.UserData)
 		assert.Equal(t, "linux64", c.Rescue)
+		assert.Equal(t, iso, c.ISO)
 	}
-
-	return
+	isoClientMock.AssertCalled(t, "GetByName", mock.Anything, "test.iso")
 }
