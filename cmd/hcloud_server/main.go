@@ -200,22 +200,24 @@ func (m *module) servers(ctx context.Context) (servers []*hcloud.Server, err err
 		}
 		if server == nil && m.config.State != stateAbsent {
 			err = fmt.Errorf("Server with id %q not found", id)
+			return
 		}
-		servers = append(servers, server)
+		if server != nil {
+			servers = append(servers, server)
+		}
 	}
 	for _, name := range m.config.Name {
 		var server *hcloud.Server
 		if server, _, err = m.client.Server.GetByName(ctx, name); err != nil {
 			return
 		}
-		if server == nil &&
-			m.config.State != stateAbsent &&
-			m.config.State != statePresent &&
-			m.config.State != stateRunning &&
-			m.config.State != stateStopped {
+		if server == nil && m.config.State != stateAbsent {
 			err = fmt.Errorf("Server with name %q not found", name)
+			return
 		}
-		servers = append(servers, server)
+		if server != nil {
+			servers = append(servers, server)
+		}
 	}
 	return
 }
