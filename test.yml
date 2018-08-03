@@ -35,6 +35,11 @@
       name: example-server01
       state: running
 
+  # mount iso on server
+  - hcloud_server:
+      name: example-server01
+      iso: ubuntu-17.10.1-server-amd64.iso
+
   - hcloud_server:
       state: list
     register: hcloud_servers
