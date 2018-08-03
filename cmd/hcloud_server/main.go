@@ -281,6 +281,36 @@ func (m *module) ensureServerExists(ctx context.Context, resp *ansible.ModuleRes
 }
 
 func (m *module) ensureServerState(ctx context.Context, resp *ansible.ModuleResponse, server *hcloud.Server, name string) (err error) {
+	// mount/dismount ISO BEFORE changing the power state of the server.
+	// this allowes to boot from the ISO in one step and
+	// prevents the server booting from the ISO if it is detached and restarted in one step
+	if server.ISO != nil &&
+		(m.config.ISO == nil || m.config.ISO.ID != server.ISO.ID) {
+		var action *hcloud.Action
+		if action, _, err = m.client.Server.DetachISO(ctx, server); err != nil {
+			return
+		}
+		if err = m.waitFn(ctx, m.client, action); err != nil {
+			return
+		}
+		m.messages.Add(fmt.Sprintf("Server %d ISO %d detached", server.ID, server.ISO.ID))
+		resp.Changed()
+		server.ISO = nil
+	}
+	if server.ISO == nil && m.config.ISO != nil {
+		var action *hcloud.Action
+		if action, _, err = m.client.Server.AttachISO(ctx, server, m.config.ISO); err != nil {
+			return
+		}
+
+		if err = m.waitFn(ctx, m.client, action); err != nil {
+			return
+		}
+		m.messages.Add(fmt.Sprintf("Server %d ISO %d attached", server.ID, m.config.ISO.ID))
+		resp.Changed()
+		server.ISO = m.config.ISO
+	}
+
 	switch m.config.State {
 	case stateRunning, stateRestarted:
 		if server.Status != hcloud.ServerStatusRunning {
@@ -328,33 +358,6 @@ func (m *module) ensureServerState(ctx context.Context, resp *ansible.ModuleResp
 		if err != nil {
 			return
 		}
-	}
-
-	if server.ISO != nil &&
-		(m.config.ISO == nil || m.config.ISO.ID != server.ISO.ID) {
-		var action *hcloud.Action
-		if action, _, err = m.client.Server.DetachISO(ctx, server); err != nil {
-			return
-		}
-		if err = m.waitFn(ctx, m.client, action); err != nil {
-			return
-		}
-		m.messages.Add(fmt.Sprintf("Server %d ISO %d detached", server.ID, server.ISO.ID))
-		resp.Changed()
-		server.ISO = nil
-	}
-	if server.ISO == nil && m.config.ISO != nil {
-		var action *hcloud.Action
-		if action, _, err = m.client.Server.AttachISO(ctx, server, m.config.ISO); err != nil {
-			return
-		}
-
-		if err = m.waitFn(ctx, m.client, action); err != nil {
-			return
-		}
-		m.messages.Add(fmt.Sprintf("Server %d ISO %d attached", server.ID, m.config.ISO.ID))
-		resp.Changed()
-		server.ISO = m.config.ISO
 	}
 
 	var rescueChanged bool
