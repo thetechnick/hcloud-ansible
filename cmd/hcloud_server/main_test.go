@@ -33,6 +33,7 @@ func init() {
 		},
 		Datacenter: &hcloud.Datacenter{Location: &hcloud.Location{}},
 		Image:      image,
+		Status:     hcloud.ServerStatusRunning,
 		PublicNet: hcloud.ServerPublicNet{
 			IPv4: hcloud.ServerPublicNetIPv4{
 				IP: net.ParseIP("192.168.1.2"),
@@ -446,13 +447,15 @@ func TestRestarted(t *testing.T) {
 	}
 
 	ctx := context.Background()
+	server := *server
+	server.Status = hcloud.ServerStatusRunning
 	var (
 		response *hcloud.Response
 		action   *hcloud.Action
 	)
 	serverClientMock := client.Server.(*hcloudtest.ServerClientMock)
 
-	serverClientMock.On("GetByID", mock.Anything, mock.Anything).Return(server, response, nil)
+	serverClientMock.On("GetByID", mock.Anything, mock.Anything).Return(&server, response, nil)
 	serverClientMock.On("Reboot", mock.Anything, mock.Anything).Return(action, response, nil)
 
 	resp, err := m.run(ctx)
@@ -460,9 +463,9 @@ func TestRestarted(t *testing.T) {
 	assert.True(t, resp.HasChanged(), "should have changed")
 	assert.False(t, resp.HasFailed(), "should not have failed")
 	serverClientMock.AssertCalled(t, "GetByID", mock.Anything, 123)
-	serverClientMock.AssertCalled(t, "Reboot", mock.Anything, server)
+	serverClientMock.AssertCalled(t, "Reboot", mock.Anything, &server)
 	assert.Equal(t, map[string]interface{}{
-		"servers": []Server{toServer(server)},
+		"servers": []Server{toServer(&server)},
 	}, resp.Data())
 }
 

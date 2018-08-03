@@ -143,11 +143,36 @@ func (m *module) present(ctx context.Context) (resp ansible.ModuleResponse, err 
 					errorsLock.Unlock()
 				}
 			}()
-			if err = m.ensureServer(ctx, &resp, name); err != nil {
+			var server *hcloud.Server
+			if server, err = m.ensureServerExists(ctx, &resp, name); err != nil {
+				return
+			}
+			if err = m.ensureServerState(ctx, &resp, server, name); err != nil {
 				return
 			}
 			return
 		}(ctx, name)
+	}
+	for _, id := range m.config.ID {
+		wg.Add(1)
+		go func(ctx context.Context, id int) (err error) {
+			defer wg.Done()
+			defer func() {
+				if err != nil {
+					errorsLock.Lock()
+					errors = append(errors, err.Error())
+					errorsLock.Unlock()
+				}
+			}()
+			var server *hcloud.Server
+			if server, _, err = m.client.Server.GetByID(ctx, id); err != nil {
+				return
+			}
+			if err = m.ensureServerState(ctx, &resp, server, ""); err != nil {
+				return
+			}
+			return
+		}(ctx, id)
 	}
 	wg.Wait()
 
@@ -195,8 +220,7 @@ func (m *module) servers(ctx context.Context) (servers []*hcloud.Server, err err
 	return
 }
 
-func (m *module) ensureServer(ctx context.Context, resp *ansible.ModuleResponse, name string) (err error) {
-	var server *hcloud.Server
+func (m *module) ensureServerExists(ctx context.Context, resp *ansible.ModuleResponse, name string) (server *hcloud.Server, err error) {
 	if server, _, err = m.client.Server.GetByName(ctx, name); err != nil {
 		return
 	}
@@ -219,7 +243,7 @@ func (m *module) ensureServer(ctx context.Context, resp *ansible.ModuleResponse,
 			errs = append(errs, "'server_type' is required")
 		}
 		if len(errs) > 0 {
-			return fmt.Errorf("Cannot create server '%s': %s", name, strings.Join(errs, ", "))
+			return nil, fmt.Errorf("Cannot create server '%s': %s", name, strings.Join(errs, ", "))
 		}
 
 		resp.Changed()
@@ -249,13 +273,16 @@ func (m *module) ensureServer(ctx context.Context, resp *ansible.ModuleResponse,
 			return
 		}
 		if err = m.waitFn(ctx, m.client, res.Action); err != nil {
-			return err
+			return nil, err
 		}
 		server = res.Server
 	}
+	return
+}
 
+func (m *module) ensureServerState(ctx context.Context, resp *ansible.ModuleResponse, server *hcloud.Server, name string) (err error) {
 	switch m.config.State {
-	case stateRunning:
+	case stateRunning, stateRestarted:
 		if server.Status != hcloud.ServerStatusRunning {
 			var action *hcloud.Action
 			if action, _, err = m.client.Server.Poweron(ctx, server); err != nil {
@@ -266,6 +293,16 @@ func (m *module) ensureServer(ctx context.Context, resp *ansible.ModuleResponse,
 				return
 			}
 			m.messages.Add(fmt.Sprintf("Server %d started", server.ID))
+			resp.Changed()
+		} else if m.config.State == stateRestarted {
+			var action *hcloud.Action
+			if action, _, err = m.client.Server.Reboot(ctx, server); err != nil {
+				return
+			}
+			if err = m.waitFn(ctx, m.client, action); err != nil {
+				return
+			}
+			m.messages.Add(fmt.Sprintf("Server %d restarted", server.ID))
 			resp.Changed()
 		}
 
@@ -409,48 +446,7 @@ func (m *module) stopped(ctx context.Context) (resp ansible.ModuleResponse, err 
 }
 
 func (m *module) restarted(ctx context.Context) (resp ansible.ModuleResponse, err error) {
-	var servers []*hcloud.Server
-	if servers, err = m.servers(ctx); err != nil {
-		return
-	}
-
-	var (
-		errors     []string
-		errorsLock sync.Mutex
-		wg         sync.WaitGroup
-	)
-	for _, server := range servers {
-		wg.Add(1)
-		resp.Changed()
-		go func(ctx context.Context, server *hcloud.Server) (err error) {
-			defer wg.Done()
-			defer func() {
-				if err != nil {
-					errorsLock.Lock()
-					errors = append(errors, err.Error())
-					errorsLock.Unlock()
-				}
-			}()
-			var action *hcloud.Action
-			if action, _, err = m.client.Server.Reboot(ctx, server); err != nil {
-				return
-			}
-			if err = m.waitFn(ctx, m.client, action); err != nil {
-				return
-			}
-			return
-		}(ctx, server)
-	}
-	wg.Wait()
-	if len(errors) > 0 {
-		err = fmt.Errorf("%s", strings.Join(errors, ", "))
-		return
-	}
-
-	if err = m.output(ctx, &resp); err != nil {
-		return
-	}
-	return
+	return m.present(ctx)
 }
 
 // needsRecreate checks if the server needs to be recreated
