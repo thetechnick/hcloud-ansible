@@ -50,3 +50,8 @@
   - hcloud_server:
       id: "{{ hcloud_servers.servers }}"
       state: absent
+
+  - hcloud_server:
+      name:
+      - non-existent
+      state: absent

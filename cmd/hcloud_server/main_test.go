@@ -428,6 +428,34 @@ func TestAbsent(t *testing.T) {
 	serverClientMock.AssertCalled(t, "GetByID", mock.Anything, 123)
 	serverClientMock.AssertCalled(t, "Delete", mock.Anything, server)
 	assert.Equal(t, map[string]interface{}(nil), resp.Data())
+
+	t.Run("server not found", func(t *testing.T) {
+		client := hcloud.NewClient()
+		client.Server = hcloudtest.NewServerClientMock()
+
+		m := module{
+			client: client,
+			args: arguments{
+				Token: "--token--",
+				State: stateAbsent,
+				ID:    "123",
+			},
+		}
+
+		ctx := context.Background()
+		var response *hcloud.Response
+		serverClientMock := client.Server.(*hcloudtest.ServerClientMock)
+		serverClientMock.On("GetByID", mock.Anything, mock.Anything).Return(nilServer, response, nil)
+		serverClientMock.On("Delete", mock.Anything, mock.Anything).Return(response, nil)
+
+		resp, err := m.run(ctx)
+		assert.NoError(t, err)
+		assert.False(t, resp.HasChanged(), "should not have changed")
+		assert.False(t, resp.HasFailed(), "should not have failed")
+		serverClientMock.AssertCalled(t, "GetByID", mock.Anything, 123)
+		// serverClientMock.AssertCalled(t, "Delete", mock.Anything, server)
+		assert.Equal(t, map[string]interface{}(nil), resp.Data())
+	})
 }
 
 func TestRestarted(t *testing.T) {
