@@ -168,6 +168,10 @@ func (m *module) present(ctx context.Context) (resp ansible.ModuleResponse, err 
 			if server, _, err = m.client.Server.GetByID(ctx, id); err != nil {
 				return
 			}
+			if server == nil {
+				err = fmt.Errorf("Server with id %d not found", id)
+				return
+			}
 			if err = m.ensureServerState(ctx, &resp, server, ""); err != nil {
 				return
 			}
