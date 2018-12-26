@@ -358,6 +358,40 @@ func TestStopped(t *testing.T) {
 		serverClientMock.AssertNotCalled(t, "Poweroff", mock.Anything, &server)
 	})
 
+	t.Run("server absent by id", func(t *testing.T) {
+		client := hcloud.NewClient()
+		client.Server = hcloudtest.NewServerClientMock()
+		client.Image = hcloudtest.NewImageClientMock()
+		client.ServerType = hcloudtest.NewServerTypeClientMock()
+
+		m := &module{
+			client: client,
+			args: arguments{
+				Token: "--token--",
+				State: stateStopped,
+				ID:    "1",
+			},
+			waitFn: util.WaitFn(func(ctx context.Context, client *hcloud.Client, action *hcloud.Action) error {
+				return nil
+			}),
+		}
+
+		ctx := context.Background()
+
+		server := *server
+		server.Status = hcloud.ServerStatusOff
+		serverClientMock := client.Server.(*hcloudtest.ServerClientMock)
+		serverClientMock.On("GetByID", mock.Anything, mock.Anything).Return(nilServer, nilResponse, nil)
+
+		resp, err := m.run(ctx)
+		assert.Error(t, err)
+		assert.False(t, resp.HasFailed(), "should not have failed") // ?
+		assert.Equal(t, fmt.Errorf("Server with id 1 not found"), err)
+		//		"servers": []Server{toServer(&server)},
+		//	}, resp.Data())
+		serverClientMock.AssertNotCalled(t, "Poweroff", mock.Anything, &server)
+	})
+
 	t.Run("server running", func(t *testing.T) {
 		client := hcloud.NewClient()
 		client.Server = hcloudtest.NewServerClientMock()
