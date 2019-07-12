@@ -1,3 +1,6 @@
+**Archived**  
+As I don't use this project anymore myself, I decided to archive it.
+
 # Hetzner Cloud - Ansible
 [![GitHub release](https://img.shields.io/github/release/thetechnick/hcloud-ansible.svg)](https://github.com/thetechnick/hcloud-ansible/releases/latest) [![Build Status](https://travis-ci.org/thetechnick/hcloud-ansible.svg?branch=master)](https://travis-ci.org/thetechnick/hcloud-ansible)
 
